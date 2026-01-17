@@ -1,15 +1,17 @@
 // ===========================================
-// VIRTUAL JOYSTICK - Touch controls for iPad
+// VIRTUAL JOYSTICK - Touch controls for iPad (v2)
 // ===========================================
 
 const Joystick = {
-    render(ctx) {
-        if (!Input.touch.active) return;
+    render(ctx, touchState, playerId = 1) {
+        // Use provided touch state or fall back to legacy single-player input
+        const touch = touchState || Input.p1Touch;
+        if (!touch.active) return;
 
-        const baseX = Input.touch.startX;
-        const baseY = Input.touch.startY;
-        const knobX = Input.touch.currentX;
-        const knobY = Input.touch.currentY;
+        const baseX = touch.startX;
+        const baseY = touch.startY;
+        const knobX = touch.currentX;
+        const knobY = touch.currentY;
 
         // Calculate clamped knob position
         const dx = knobX - baseX;
@@ -27,27 +29,30 @@ const Joystick = {
 
         ctx.save();
 
+        // Player-specific colors
+        const baseColor = playerId === 1 ? '100, 180, 255' : '100, 255, 150'; // Blue for P1, Green for P2
+
         // Outer ring (base)
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.strokeStyle = `rgba(${baseColor}, 0.3)`;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(baseX, baseY, JOYSTICK_MAX_RADIUS, 0, Math.PI * 2);
         ctx.stroke();
 
         // Inner fill
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = `rgba(${baseColor}, 0.1)`;
         ctx.beginPath();
         ctx.arc(baseX, baseY, JOYSTICK_MAX_RADIUS, 0, Math.PI * 2);
         ctx.fill();
 
         // Knob
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillStyle = `rgba(${baseColor}, 0.6)`;
         ctx.beginPath();
         ctx.arc(finalKnobX, finalKnobY, JOYSTICK_VISUAL_RADIUS, 0, Math.PI * 2);
         ctx.fill();
 
         // Knob border
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.strokeStyle = `rgba(${baseColor}, 0.8)`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(finalKnobX, finalKnobY, JOYSTICK_VISUAL_RADIUS, 0, Math.PI * 2);
@@ -55,13 +60,19 @@ const Joystick = {
 
         // Direction indicator
         if (clampedDist > JOYSTICK_DEAD_ZONE * JOYSTICK_MAX_RADIUS) {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.strokeStyle = `rgba(${baseColor}, 0.4)`;
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(baseX, baseY);
             ctx.lineTo(finalKnobX, finalKnobY);
             ctx.stroke();
         }
+
+        // Player label
+        ctx.fillStyle = `rgba(${baseColor}, 0.7)`;
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('P' + playerId, baseX, baseY - JOYSTICK_MAX_RADIUS - 8);
 
         ctx.restore();
     }

@@ -1,5 +1,5 @@
 // ===========================================
-// INVADER ENTITY - Dark Grey Enemy Dragons
+// INVADER ENTITY - Dark Grey Enemy Dragons (v2 AI)
 // ===========================================
 
 class Invader {
@@ -8,7 +8,8 @@ class Invader {
         this.y = y;
         this.id = id;
         this.radius = INVADER_RADIUS;
-        this.speed = INVADER_BASE_SPEED;
+        this.baseSpeed = INVADER_BASE_SPEED;
+        this.speed = this.baseSpeed;
 
         // State machine
         this.state = INVADER_STATES.SEEK;
@@ -19,6 +20,15 @@ class Invader {
         // Scare tracking (for rate-limited calm bonus)
         this.lastScareTime = 0;
 
+        // v2 AI improvements
+        this.avoidNest = null;        // Nest to avoid (anti-camping)
+        this.avoidNestTime = 0;       // When to clear avoid
+        this.lastTargetNest = null;   // Previous target for variety
+
+        // Banished state (for permanent banish power-up)
+        this.banished = false;
+        this.banishTime = 0;
+
         // Animation
         this.animTimer = Math.random() * Math.PI * 2;
         this.facingRight = Math.random() > 0.5;
@@ -26,29 +36,111 @@ class Invader {
         this.tailWag = 0;
     }
 
+    // Apply difficulty modifier to speed
+    setSpeedMultiplier(multiplier) {
+        this.speed = this.baseSpeed * multiplier;
+    }
+
     get canGiveScareCalmBonus() {
         return Date.now() - this.lastScareTime > SCARE_COOLDOWN;
     }
 
-    selectTargetNest(nests) {
+    selectTargetNest(nests, dragons = [], allInvaders = []) {
         if (nests.length === 0) return null;
 
-        // Sort by health (lowest first), then by distance
-        const sortedNests = [...nests].sort((a, b) => {
-            // Prefer damaged nests
-            if (a.health !== b.health) {
-                return a.health - b.health;
+        // Clear avoid if expired
+        if (this.avoidNest && Date.now() > this.avoidNestTime) {
+            this.avoidNest = null;
+        }
+
+        // Count how many other invaders are targeting each nest
+        const invadersPerNest = new Map();
+        for (const nest of nests) {
+            invadersPerNest.set(nest, 0);
+        }
+        for (const invader of allInvaders) {
+            if (invader && invader !== this && invader.targetNest && !invader.banished) {
+                const count = invadersPerNest.get(invader.targetNest) || 0;
+                invadersPerNest.set(invader.targetNest, count + 1);
             }
-            // Tie-breaker: closest
-            const distA = Math.hypot(a.x - this.x, a.y - this.y);
-            const distB = Math.hypot(b.x - this.x, b.y - this.y);
-            return distA - distB;
+        }
+
+        // Calculate ideal distribution (equal invaders per nest)
+        const activeInvaders = allInvaders.filter(inv => inv && !inv.banished).length;
+        const idealPerNest = activeInvaders / nests.length;
+
+        // v2 AI: Weighted scoring system for smarter targeting
+        const scoredNests = nests.map(nest => {
+            let score = 100; // Base score
+
+            // Factor 1: Prefer damaged nests (lower health = higher score)
+            score += (100 - nest.health) * 0.3;
+
+            // Factor 2: Distance penalty (closer is better, but less weight)
+            const dist = Math.hypot(nest.x - this.x, nest.y - this.y);
+            score -= dist * 0.05;
+
+            // Factor 3: Dragon proximity penalty (avoid defended nests)
+            for (const dragon of dragons) {
+                if (dragon) {
+                    const dragonDist = Math.hypot(nest.x - dragon.x, nest.y - dragon.y);
+                    if (dragonDist < 100) {
+                        score -= (100 - dragonDist) * 0.5;
+                    }
+                }
+            }
+
+            // Factor 4: Avoid recently defended nest (anti-camping response)
+            if (this.avoidNest && nest === this.avoidNest) {
+                score -= 40;
+            }
+
+            // Factor 5: Variety bonus - don't always target the same nest
+            if (this.lastTargetNest && nest === this.lastTargetNest) {
+                score -= 10;
+            }
+
+            // Factor 6: DISTRIBUTION - heavily penalize nests that already have many invaders
+            // This is the key factor for even distribution
+            const currentCount = invadersPerNest.get(nest) || 0;
+            if (currentCount >= idealPerNest) {
+                // Over-represented nest - heavy penalty
+                score -= (currentCount - idealPerNest + 1) * 40;
+            } else {
+                // Under-represented nest - bonus
+                score += (idealPerNest - currentCount) * 20;
+            }
+
+            return { nest, score };
         });
 
-        return sortedNests[0];
+        // Sort by score (highest first)
+        scoredNests.sort((a, b) => b.score - a.score);
+
+        // Add randomness to prevent all invaders picking the same nest
+        // If top 2 scores are close, randomly pick between them
+        if (scoredNests.length >= 2) {
+            const scoreDiff = scoredNests[0].score - scoredNests[1].score;
+            if (scoreDiff < 20 && Math.random() < 0.4) {
+                // 40% chance to pick second best if scores are close
+                const selected = scoredNests[1].nest;
+                this.lastTargetNest = selected;
+                return selected;
+            }
+        }
+
+        // Select best target
+        const selected = scoredNests[0].nest;
+        this.lastTargetNest = selected;
+        return selected;
     }
 
-    update(dt, nests, dragonPos) {
+    update(dt, nests, dragonPos, dragons = [], allInvaders = []) {
+        // Skip update if banished
+        if (this.banished) {
+            return;
+        }
+
         this.animTimer += dt;
         this.stateTimer -= dt * 1000;
         this.wingAngle = Math.sin(this.animTimer * 6) * 0.4;
@@ -56,7 +148,7 @@ class Invader {
 
         switch (this.state) {
             case INVADER_STATES.SEEK:
-                this.updateSeek(dt, nests);
+                this.updateSeek(dt, nests, dragons, allInvaders);
                 break;
 
             case INVADER_STATES.HARASS:
@@ -68,7 +160,7 @@ class Invader {
                 break;
 
             case INVADER_STATES.RECOVER:
-                this.updateRecover(dt, nests);
+                this.updateRecover(dt, nests, dragons, allInvaders);
                 break;
         }
 
@@ -77,13 +169,43 @@ class Invader {
         this.y = Math.max(this.radius + 70, Math.min(GAME_HEIGHT - this.radius - 70, this.y));
     }
 
-    updateSeek(dt, nests) {
+    updateSeek(dt, nests, dragons = [], allInvaders = []) {
         // Select target if none
         if (!this.targetNest) {
-            this.targetNest = this.selectTargetNest(nests);
+            this.targetNest = this.selectTargetNest(nests, dragons, allInvaders);
         }
 
         if (!this.targetNest) return;
+
+        // v2 AI: Re-evaluate target periodically for better distribution
+        // Check more frequently (3% chance per frame) to adapt to changing conditions
+        if (Math.random() < 0.03) {
+            // Consider switching if dragon is camping or for better distribution
+            let shouldReevaluate = false;
+
+            // Check if dragon is camping our target
+            for (const dragon of dragons) {
+                if (dragon) {
+                    const dragonDist = Math.hypot(this.targetNest.x - dragon.x, this.targetNest.y - dragon.y);
+                    if (dragonDist < 80) {
+                        shouldReevaluate = true;
+                        break;
+                    }
+                }
+            }
+
+            // Also re-evaluate for distribution purposes occasionally
+            if (!shouldReevaluate && Math.random() < 0.3) {
+                shouldReevaluate = true;
+            }
+
+            if (shouldReevaluate) {
+                const newTarget = this.selectTargetNest(nests, dragons, allInvaders);
+                if (newTarget !== this.targetNest) {
+                    this.targetNest = newTarget;
+                }
+            }
+        }
 
         // Move toward target
         const dx = this.targetNest.x - this.x;
@@ -148,12 +270,25 @@ class Invader {
         }
     }
 
-    updateRecover(dt, nests) {
+    updateRecover(dt, nests, dragons = [], allInvaders = []) {
         // Wait, then re-target
         if (this.stateTimer <= 0) {
-            this.targetNest = this.selectTargetNest(nests);
+            this.targetNest = this.selectTargetNest(nests, dragons, allInvaders);
             this.state = INVADER_STATES.SEEK;
         }
+    }
+
+    // v2: Permanent banish (from power-up)
+    banish() {
+        this.banished = true;
+        this.banishTime = Date.now();
+        this.state = INVADER_STATES.FLEE;
+    }
+
+    // Check if banished invader should respawn
+    shouldRespawn() {
+        if (!this.banished) return false;
+        return Date.now() - this.banishTime > BANISH_RESPAWN_DELAY;
     }
 
     scare(dragonX, dragonY) {
@@ -162,18 +297,31 @@ class Invader {
         const dy = this.y - dragonY;
         const dist = Math.hypot(dx, dy);
 
+        let baseAngle;
         if (dist > 0) {
-            this.fleeDirection.x = dx / dist;
-            this.fleeDirection.y = dy / dist;
+            baseAngle = Math.atan2(dy, dx);
         } else {
             // Random direction if exactly on top
-            const angle = Math.random() * Math.PI * 2;
-            this.fleeDirection.x = Math.cos(angle);
-            this.fleeDirection.y = Math.sin(angle);
+            baseAngle = Math.random() * Math.PI * 2;
+        }
+
+        // v2 AI: Add flee dispersion (±45 degrees random spread)
+        // This prevents all invaders from fleeing in same direction
+        const dispersionAngle = (Math.random() - 0.5) * (Math.PI / 2); // ±45 degrees
+        const finalAngle = baseAngle + dispersionAngle;
+
+        this.fleeDirection.x = Math.cos(finalAngle);
+        this.fleeDirection.y = Math.sin(finalAngle);
+
+        // Mark the current nest as "defended" to avoid camping
+        if (this.targetNest) {
+            this.avoidNest = this.targetNest;
+            this.avoidNestTime = Date.now() + 5000; // Avoid for 5 seconds
         }
 
         this.state = INVADER_STATES.FLEE;
         this.stateTimer = INVADER_FLEE_DURATION;
+        this.targetNest = null; // Clear target so they re-evaluate after fleeing
 
         // Check if can give calm bonus
         const giveBonus = this.canGiveScareCalmBonus;

@@ -15,9 +15,14 @@ const Spawner = {
     reset() {
         this.nextEggId = 1;
         this.nextInvaderId = 1;
-        this.lastInvaderSpawn = Date.now();
-        this.lastEggSpawn = Date.now();
-        this.currentSpawnInterval = 8000;
+        // Set spawn times so first spawn happens after 5 seconds
+        // We set lastSpawn to (now - interval + 5000) so the check passes after 5 seconds
+        const now = Date.now();
+        this.firstSpawnDelay = 5000;
+        this.lastInvaderSpawn = now;
+        this.lastEggSpawn = now;
+        this.isFirstSpawn = true;
+        this.currentSpawnInterval = 10000;
         this.successfulActions = 0;
     },
 
@@ -84,39 +89,46 @@ const Spawner = {
     },
 
     // Spawn a power-up
-    spawnPowerUp(nests, dragon) {
+    spawnPowerUp(nests, dragon, lifetime = POWERUP_LIFETIME) {
         const pos = this.getRandomPlayAreaPosition(nests, 60);
 
         // Random type
         const types = Object.values(POWERUP_TYPES);
         const type = types[Math.floor(Math.random() * types.length)];
 
-        return new PowerUp(pos.x, pos.y, type);
+        return new PowerUp(pos.x, pos.y, type, lifetime);
     },
 
     // Update spawn timers and return new entities
-    update(eggs, invaders, nests, phase) {
+    // spawnInterval: the base spawn interval in ms (calculated by Game based on difficulty/players)
+    update(eggs, invaders, nests, phase, spawnInterval) {
         const now = Date.now();
         const newEntities = {
             eggs: [],
             invaders: []
         };
 
-        // Update spawn interval based on phase
-        const [minInterval, maxInterval] = phase.spawnInterval;
-        this.currentSpawnInterval = minInterval + Math.random() * (maxInterval - minInterval);
+        // Apply phase speed multiplier to base spawn interval
+        // As more eggs are delivered, spawns get faster
+        this.currentSpawnInterval = spawnInterval * phase.spawnSpeedMultiplier;
 
-        // Spawn invaders
-        if (now - this.lastInvaderSpawn > this.currentSpawnInterval) {
-            if (invaders.length < phase.maxInvaders) {
+        // For first spawn, use 5 second delay; after that use normal interval
+        const effectiveInterval = this.isFirstSpawn ? this.firstSpawnDelay : this.currentSpawnInterval;
+
+        // Count active (non-banished) invaders
+        const activeInvaders = invaders.filter(inv => !inv.banished);
+
+        // Spawn invaders at fixed interval
+        if (now - this.lastInvaderSpawn > effectiveInterval) {
+            if (activeInvaders.length < phase.maxInvaders) {
                 newEntities.invaders.push(this.spawnInvader());
                 this.lastInvaderSpawn = now;
+                this.isFirstSpawn = false; // After first spawn, use normal interval
             }
         }
 
-        // Spawn eggs (less frequently, and only if below max)
-        const eggSpawnInterval = 5000 + Math.random() * 3000;
-        if (now - this.lastEggSpawn > eggSpawnInterval) {
+        // Spawn eggs at the same interval as invaders
+        if (now - this.lastEggSpawn > effectiveInterval) {
             const groundEggs = eggs.filter(e => !e.cracked);
             if (groundEggs.length < phase.maxEggs) {
                 newEntities.eggs.push(this.spawnEgg(nests));

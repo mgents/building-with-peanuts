@@ -1,13 +1,14 @@
 // ===========================================
-// DRAGON ENTITY - Player Character (Blue Dragon)
+// DRAGON ENTITY - Player Character (Blue/Green Dragon)
 // ===========================================
 
 class Dragon {
-    constructor(x, y) {
+    constructor(x, y, playerId = 1) {
         this.x = x;
         this.y = y;
         this.radius = DRAGON_RADIUS;
         this.baseSpeed = DRAGON_BASE_SPEED;
+        this.playerId = playerId; // 1 = Blue dragon (P1), 2 = Green dragon (P2)
 
         // State
         this.carrying = null; // Egg ID or null
@@ -16,10 +17,63 @@ class Dragon {
 
         // Animation
         this.animTimer = 0;
-        this.facingRight = true;
+        this.facingRight = playerId === 1; // P2 starts facing left
         this.wingAngle = 0;
         this.breathTimer = 0;
         this.tailWag = 0;
+
+        // Color schemes based on player
+        if (playerId === 2) {
+            this.colors = {
+                body: '#22c55e',
+                bodyLight: '#4ade80',
+                bodyDark: '#15803d',
+                belly: '#86efac',
+                bellyLight: '#bbf7d0',
+                wing: '#16a34a',
+                wingMembrane: 'rgba(74, 222, 128, 0.7)',
+                eye: '#00ff88',
+                eyeLight: '#00ffaa',
+                eyeDark: '#00cc6a',
+                spine: '#15803d',
+                tail: '#22c55e',
+                tailDark: '#15803d',
+                tailTip: '#0d6930',
+                snout: '#1ea34a',
+                nostril: '#0d6930',
+                eyeSocket: '#15803d',
+                horn: '#d4d4d4',
+                earFin: 'rgba(74, 222, 128, 0.8)',
+                legBack: '#1ea34a',
+                legFront: '#22c55e',
+                boostGlow: '#00ff88'
+            };
+        } else {
+            this.colors = {
+                body: '#1e90ff',
+                bodyLight: '#4db8ff',
+                bodyDark: '#0066cc',
+                belly: '#b3e0ff',
+                bellyLight: '#80c9f5',
+                wing: '#1a7ad9',
+                wingMembrane: 'rgba(100, 180, 255, 0.7)',
+                eye: '#00ffff',
+                eyeLight: '#00bfff',
+                eyeDark: '#0080ff',
+                spine: '#0077cc',
+                tail: '#1e90ff',
+                tailDark: '#0066cc',
+                tailTip: '#0055aa',
+                snout: '#1a85e6',
+                nostril: '#0055aa',
+                eyeSocket: '#0066aa',
+                horn: '#c0c0c0',
+                earFin: 'rgba(100, 180, 255, 0.8)',
+                legBack: '#1a7ad9',
+                legFront: '#1e90ff',
+                boostGlow: '#00ffff'
+            };
+        }
     }
 
     get speed() {
@@ -92,7 +146,7 @@ class Dragon {
 
         // Speed boost glow effect
         if (this.speedBoostActive) {
-            ctx.shadowColor = '#00ffff';
+            ctx.shadowColor = this.colors.boostGlow;
             ctx.shadowBlur = 25;
         }
 
@@ -130,6 +184,17 @@ class Dragon {
         // Position egg in front claws area
         ctx.translate(5, 12);
 
+        // ENHANCED: Animated golden glow around the egg
+        const glowPulse = 0.7 + Math.sin(this.animTimer * 4) * 0.3;
+        ctx.save();
+        ctx.shadowColor = '#f4d03f';
+        ctx.shadowBlur = 15 * glowPulse;
+        ctx.fillStyle = 'rgba(244, 208, 63, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
         // Egg shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
         ctx.beginPath();
@@ -162,6 +227,52 @@ class Dragon {
         ctx.fill();
 
         ctx.restore();
+
+        // ENHANCED: Draw floating indicator above dragon (separate from egg position)
+        this.renderCarryingIndicator(ctx);
+    }
+
+    renderCarryingIndicator(ctx) {
+        ctx.save();
+
+        // Position above dragon's head
+        const indicatorY = -this.radius - 25;
+        const bobOffset = Math.sin(this.animTimer * 3) * 3;
+
+        // Small egg icon with golden ring
+        ctx.translate(this.facingRight ? this.radius * 0.7 : -this.radius * 0.7, indicatorY + bobOffset);
+
+        // Golden ring background
+        const ringPulse = 0.8 + Math.sin(this.animTimer * 5) * 0.2;
+        ctx.strokeStyle = `rgba(244, 208, 63, ${ringPulse})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Mini egg icon
+        const miniEggGrad = ctx.createRadialGradient(-1, -1, 0, 0, 0, 6);
+        miniEggGrad.addColorStop(0, '#fffff5');
+        miniEggGrad.addColorStop(0.6, '#f5f5dc');
+        miniEggGrad.addColorStop(1, '#e8d5a3');
+        ctx.fillStyle = miniEggGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mini egg spot
+        ctx.fillStyle = '#d4c4a0';
+        ctx.beginPath();
+        ctx.arc(-1, -2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mini egg highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(-1, -3, 2, 1, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     renderTail(ctx) {
@@ -178,7 +289,7 @@ class Dragon {
             const wag = Math.sin(this.tailWag + i * 0.5) * (5 + i * 2);
 
             // Tail segment gradient from body to tip
-            const segColor = this.lerpColor('#1e90ff', '#0066cc', t);
+            const segColor = this.lerpColor(this.colors.tail, this.colors.tailDark, t);
             ctx.fillStyle = segColor;
 
             ctx.beginPath();
@@ -190,7 +301,7 @@ class Dragon {
         }
 
         // Tail tip (arrow/spade shape)
-        ctx.fillStyle = '#0055aa';
+        ctx.fillStyle = this.colors.tailTip;
         ctx.beginPath();
         ctx.moveTo(px - 10, py + Math.sin(this.tailWag + 3) * 12);
         ctx.lineTo(px + 2, py + Math.sin(this.tailWag + 3) * 12 - 6);
@@ -204,7 +315,7 @@ class Dragon {
     renderLegs(ctx, isBack) {
         ctx.save();
 
-        const legColor = isBack ? '#1a7ad9' : '#1e90ff';
+        const legColor = isBack ? this.colors.legBack : this.colors.legFront;
         const clawColor = '#e0e0e0';
         const yOffset = isBack ? 2 : 0;
         const xOffset = isBack ? -3 : 0;
@@ -247,8 +358,8 @@ class Dragon {
         ctx.save();
 
         // Wing membrane color
-        const wingMembrane = 'rgba(100, 180, 255, 0.7)';
-        const wingBone = '#1a7ad9';
+        const wingMembrane = this.colors.wingMembrane;
+        const wingBone = this.colors.wing;
 
         // Upper wing
         ctx.save();
@@ -313,9 +424,9 @@ class Dragon {
     renderBody(ctx) {
         // Body gradient
         const bodyGrad = ctx.createRadialGradient(5, 0, 0, 0, 0, this.radius * 1.2);
-        bodyGrad.addColorStop(0, '#4db8ff');
-        bodyGrad.addColorStop(0.5, '#1e90ff');
-        bodyGrad.addColorStop(1, '#0066cc');
+        bodyGrad.addColorStop(0, this.colors.bodyLight);
+        bodyGrad.addColorStop(0.5, this.colors.body);
+        bodyGrad.addColorStop(1, this.colors.bodyDark);
 
         // Main body
         ctx.fillStyle = bodyGrad;
@@ -325,8 +436,8 @@ class Dragon {
 
         // Belly scales (lighter)
         const bellyGrad = ctx.createRadialGradient(5, 6, 0, 5, 6, this.radius * 0.6);
-        bellyGrad.addColorStop(0, '#b3e0ff');
-        bellyGrad.addColorStop(1, '#80c9f5');
+        bellyGrad.addColorStop(0, this.colors.belly);
+        bellyGrad.addColorStop(1, this.colors.bellyLight);
 
         ctx.fillStyle = bellyGrad;
         ctx.beginPath();
@@ -334,7 +445,7 @@ class Dragon {
         ctx.fill();
 
         // Belly scale lines
-        ctx.strokeStyle = 'rgba(100, 180, 230, 0.5)';
+        ctx.strokeStyle = this.playerId === 2 ? 'rgba(74, 222, 128, 0.5)' : 'rgba(100, 180, 230, 0.5)';
         ctx.lineWidth = 1;
         for (let i = 0; i < 4; i++) {
             ctx.beginPath();
@@ -349,9 +460,9 @@ class Dragon {
 
         // Head shape gradient
         const headGrad = ctx.createRadialGradient(3, -2, 0, 0, 0, 14);
-        headGrad.addColorStop(0, '#4db8ff');
-        headGrad.addColorStop(0.6, '#1e90ff');
-        headGrad.addColorStop(1, '#0066cc');
+        headGrad.addColorStop(0, this.colors.bodyLight);
+        headGrad.addColorStop(0.6, this.colors.body);
+        headGrad.addColorStop(1, this.colors.bodyDark);
 
         // Main head
         ctx.fillStyle = headGrad;
@@ -360,13 +471,13 @@ class Dragon {
         ctx.fill();
 
         // Snout
-        ctx.fillStyle = '#1a85e6';
+        ctx.fillStyle = this.colors.snout;
         ctx.beginPath();
         ctx.ellipse(12, 2, 8, 6, 0.15, 0, Math.PI * 2);
         ctx.fill();
 
         // Nostrils
-        ctx.fillStyle = '#0055aa';
+        ctx.fillStyle = this.colors.nostril;
         ctx.beginPath();
         ctx.ellipse(18, 0, 2, 1.5, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -375,7 +486,7 @@ class Dragon {
         ctx.fill();
 
         // Eye socket
-        ctx.fillStyle = '#0066aa';
+        ctx.fillStyle = this.colors.eyeSocket;
         ctx.beginPath();
         ctx.ellipse(2, -3, 7, 6, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -386,11 +497,11 @@ class Dragon {
         ctx.ellipse(3, -3, 5.5, 5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright blue iris
+        // Bright iris (blue for P1, green for P2)
         const irisGrad = ctx.createRadialGradient(4, -3, 0, 4, -3, 4);
-        irisGrad.addColorStop(0, '#00ffff');
-        irisGrad.addColorStop(0.5, '#00bfff');
-        irisGrad.addColorStop(1, '#0080ff');
+        irisGrad.addColorStop(0, this.colors.eye);
+        irisGrad.addColorStop(0.5, this.colors.eyeLight);
+        irisGrad.addColorStop(1, this.colors.eyeDark);
 
         ctx.fillStyle = irisGrad;
         ctx.beginPath();
@@ -410,16 +521,16 @@ class Dragon {
         ctx.fill();
 
         // Eye glow effect
-        ctx.shadowColor = '#00ffff';
+        ctx.shadowColor = this.colors.eye;
         ctx.shadowBlur = 8;
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        ctx.fillStyle = this.playerId === 2 ? 'rgba(0, 255, 136, 0.3)' : 'rgba(0, 255, 255, 0.3)';
         ctx.beginPath();
         ctx.ellipse(3, -3, 6, 5, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
 
         // Small horns
-        ctx.fillStyle = '#c0c0c0';
+        ctx.fillStyle = this.colors.horn;
         ctx.beginPath();
         ctx.moveTo(-5, -8);
         ctx.lineTo(-8, -16);
@@ -435,7 +546,7 @@ class Dragon {
         ctx.fill();
 
         // Ear fin
-        ctx.fillStyle = 'rgba(100, 180, 255, 0.8)';
+        ctx.fillStyle = this.colors.earFin;
         ctx.beginPath();
         ctx.moveTo(-8, -2);
         ctx.quadraticCurveTo(-15, -5, -12, 5);
@@ -447,7 +558,7 @@ class Dragon {
     }
 
     renderSpines(ctx) {
-        ctx.fillStyle = '#0077cc';
+        ctx.fillStyle = this.colors.spine;
 
         // Back spines
         const spineCount = 5;

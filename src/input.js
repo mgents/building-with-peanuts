@@ -1,21 +1,44 @@
 // ===========================================
-// INPUT SYSTEM - Keyboard + Touch Joystick
+// INPUT SYSTEM - Keyboard + Touch Joystick (Two-Player Support)
 // ===========================================
 
 const Input = {
-    // Unified movement vector (-1 to 1 for each axis)
-    movement: { x: 0, y: 0 },
+    // Player 1 movement vector (WASD)
+    p1Movement: { x: 0, y: 0 },
 
-    // Keyboard state
-    keys: {
+    // Player 2 movement vector (Arrow Keys)
+    p2Movement: { x: 0, y: 0 },
+
+    // Legacy single-player alias
+    get movement() { return this.p1Movement; },
+
+    // Player 1 keyboard state (WASD)
+    p1Keys: {
         up: false,
         down: false,
         left: false,
         right: false
     },
 
-    // Touch state
-    touch: {
+    // Player 2 keyboard state (Arrow Keys)
+    p2Keys: {
+        up: false,
+        down: false,
+        left: false,
+        right: false
+    },
+
+    // Touch state for Player 1 (left side joystick)
+    p1Touch: {
+        active: false,
+        startX: 0,
+        startY: 0,
+        currentX: 0,
+        currentY: 0
+    },
+
+    // Touch state for Player 2 (right side joystick) - for two-player touch mode
+    p2Touch: {
         active: false,
         startX: 0,
         startY: 0,
@@ -25,6 +48,9 @@ const Input = {
 
     // Device detection
     isTouchDevice: false,
+
+    // Two-player mode flag
+    twoPlayerMode: false,
 
     init() {
         // Detect touch device
@@ -47,142 +73,299 @@ const Input = {
         canvas.addEventListener('mouseleave', (e) => this.onMouseUp(e));
     },
 
+    setTwoPlayerMode(enabled) {
+        this.twoPlayerMode = enabled;
+    },
+
     onKeyDown(e) {
+        // Player 1 - WASD
         switch(e.code) {
             case 'KeyW':
-            case 'ArrowUp':
-                this.keys.up = true;
+                this.p1Keys.up = true;
                 break;
             case 'KeyS':
-            case 'ArrowDown':
-                this.keys.down = true;
+                this.p1Keys.down = true;
                 break;
             case 'KeyA':
-            case 'ArrowLeft':
-                this.keys.left = true;
+                this.p1Keys.left = true;
                 break;
             case 'KeyD':
-            case 'ArrowRight':
-                this.keys.right = true;
+                this.p1Keys.right = true;
                 break;
+        }
+
+        // Player 2 - Arrow Keys
+        switch(e.code) {
+            case 'ArrowUp':
+                this.p2Keys.up = true;
+                break;
+            case 'ArrowDown':
+                this.p2Keys.down = true;
+                break;
+            case 'ArrowLeft':
+                this.p2Keys.left = true;
+                break;
+            case 'ArrowRight':
+                this.p2Keys.right = true;
+                break;
+        }
+
+        // In single player mode, arrow keys also control P1
+        if (!this.twoPlayerMode) {
+            switch(e.code) {
+                case 'ArrowUp':
+                    this.p1Keys.up = true;
+                    break;
+                case 'ArrowDown':
+                    this.p1Keys.down = true;
+                    break;
+                case 'ArrowLeft':
+                    this.p1Keys.left = true;
+                    break;
+                case 'ArrowRight':
+                    this.p1Keys.right = true;
+                    break;
+            }
         }
     },
 
     onKeyUp(e) {
+        // Player 1 - WASD
         switch(e.code) {
             case 'KeyW':
-            case 'ArrowUp':
-                this.keys.up = false;
+                this.p1Keys.up = false;
                 break;
             case 'KeyS':
-            case 'ArrowDown':
-                this.keys.down = false;
+                this.p1Keys.down = false;
                 break;
             case 'KeyA':
-            case 'ArrowLeft':
-                this.keys.left = false;
+                this.p1Keys.left = false;
                 break;
             case 'KeyD':
-            case 'ArrowRight':
-                this.keys.right = false;
+                this.p1Keys.right = false;
                 break;
+        }
+
+        // Player 2 - Arrow Keys
+        switch(e.code) {
+            case 'ArrowUp':
+                this.p2Keys.up = false;
+                break;
+            case 'ArrowDown':
+                this.p2Keys.down = false;
+                break;
+            case 'ArrowLeft':
+                this.p2Keys.left = false;
+                break;
+            case 'ArrowRight':
+                this.p2Keys.right = false;
+                break;
+        }
+
+        // In single player mode, arrow keys also control P1
+        if (!this.twoPlayerMode) {
+            switch(e.code) {
+                case 'ArrowUp':
+                    this.p1Keys.up = false;
+                    break;
+                case 'ArrowDown':
+                    this.p1Keys.down = false;
+                    break;
+                case 'ArrowLeft':
+                    this.p1Keys.left = false;
+                    break;
+                case 'ArrowRight':
+                    this.p1Keys.right = false;
+                    break;
+            }
         }
     },
 
     onTouchStart(e) {
         e.preventDefault();
 
-        const touch = e.touches[0];
-        const pos = screenToGame(touch.clientX, touch.clientY);
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            const pos = screenToGame(touch.clientX, touch.clientY);
 
-        // Only activate joystick on left half of screen
-        if (pos.x < GAME_WIDTH / 2) {
-            this.touch.active = true;
-            this.touch.startX = pos.x;
-            this.touch.startY = pos.y;
-            this.touch.currentX = pos.x;
-            this.touch.currentY = pos.y;
+            if (this.twoPlayerMode) {
+                // Two-player mode: left half = P1, right half = P2
+                if (pos.x < GAME_WIDTH / 2) {
+                    if (!this.p1Touch.active) {
+                        this.p1Touch.active = true;
+                        this.p1Touch.identifier = touch.identifier;
+                        this.p1Touch.startX = pos.x;
+                        this.p1Touch.startY = pos.y;
+                        this.p1Touch.currentX = pos.x;
+                        this.p1Touch.currentY = pos.y;
+                    }
+                } else {
+                    if (!this.p2Touch.active) {
+                        this.p2Touch.active = true;
+                        this.p2Touch.identifier = touch.identifier;
+                        this.p2Touch.startX = pos.x;
+                        this.p2Touch.startY = pos.y;
+                        this.p2Touch.currentX = pos.x;
+                        this.p2Touch.currentY = pos.y;
+                    }
+                }
+            } else {
+                // Single player mode: left half of screen only
+                if (pos.x < GAME_WIDTH / 2) {
+                    this.p1Touch.active = true;
+                    this.p1Touch.identifier = touch.identifier;
+                    this.p1Touch.startX = pos.x;
+                    this.p1Touch.startY = pos.y;
+                    this.p1Touch.currentX = pos.x;
+                    this.p1Touch.currentY = pos.y;
+                }
+            }
         }
     },
 
     onTouchMove(e) {
         e.preventDefault();
 
-        if (!this.touch.active) return;
+        for (let i = 0; i < e.touches.length; i++) {
+            const touch = e.touches[i];
+            const pos = screenToGame(touch.clientX, touch.clientY);
 
-        const touch = e.touches[0];
-        const pos = screenToGame(touch.clientX, touch.clientY);
+            if (this.p1Touch.active && touch.identifier === this.p1Touch.identifier) {
+                this.p1Touch.currentX = pos.x;
+                this.p1Touch.currentY = pos.y;
+            }
 
-        this.touch.currentX = pos.x;
-        this.touch.currentY = pos.y;
+            if (this.p2Touch.active && touch.identifier === this.p2Touch.identifier) {
+                this.p2Touch.currentX = pos.x;
+                this.p2Touch.currentY = pos.y;
+            }
+        }
     },
 
     onTouchEnd(e) {
         e.preventDefault();
-        this.touch.active = false;
+
+        // Check which touches ended
+        const activeTouches = new Set();
+        for (let i = 0; i < e.touches.length; i++) {
+            activeTouches.add(e.touches[i].identifier);
+        }
+
+        if (this.p1Touch.active && !activeTouches.has(this.p1Touch.identifier)) {
+            this.p1Touch.active = false;
+        }
+
+        if (this.p2Touch.active && !activeTouches.has(this.p2Touch.identifier)) {
+            this.p2Touch.active = false;
+        }
     },
 
     onMouseDown(e) {
         const pos = screenToGame(e.clientX, e.clientY);
 
-        // Only activate joystick on left half of screen
-        if (pos.x < GAME_WIDTH / 2) {
-            this.touch.active = true;
-            this.touch.startX = pos.x;
-            this.touch.startY = pos.y;
-            this.touch.currentX = pos.x;
-            this.touch.currentY = pos.y;
+        if (this.twoPlayerMode) {
+            // In two-player mode, mouse controls whoever's side it's on
+            if (pos.x < GAME_WIDTH / 2) {
+                this.p1Touch.active = true;
+                this.p1Touch.startX = pos.x;
+                this.p1Touch.startY = pos.y;
+                this.p1Touch.currentX = pos.x;
+                this.p1Touch.currentY = pos.y;
+            } else {
+                this.p2Touch.active = true;
+                this.p2Touch.startX = pos.x;
+                this.p2Touch.startY = pos.y;
+                this.p2Touch.currentX = pos.x;
+                this.p2Touch.currentY = pos.y;
+            }
+        } else {
+            // Single player: only left half activates joystick
+            if (pos.x < GAME_WIDTH / 2) {
+                this.p1Touch.active = true;
+                this.p1Touch.startX = pos.x;
+                this.p1Touch.startY = pos.y;
+                this.p1Touch.currentX = pos.x;
+                this.p1Touch.currentY = pos.y;
+            }
         }
     },
 
     onMouseMove(e) {
-        if (!this.touch.active) return;
-
         const pos = screenToGame(e.clientX, e.clientY);
-        this.touch.currentX = pos.x;
-        this.touch.currentY = pos.y;
+
+        if (this.p1Touch.active) {
+            this.p1Touch.currentX = pos.x;
+            this.p1Touch.currentY = pos.y;
+        }
+
+        if (this.p2Touch.active) {
+            this.p2Touch.currentX = pos.x;
+            this.p2Touch.currentY = pos.y;
+        }
     },
 
     onMouseUp(e) {
-        this.touch.active = false;
+        this.p1Touch.active = false;
+        this.p2Touch.active = false;
     },
 
-    update() {
-        // Reset movement vector
-        this.movement.x = 0;
-        this.movement.y = 0;
+    // Calculate movement from keys and touch for a player
+    calculateMovement(keys, touch) {
+        let x = 0;
+        let y = 0;
 
         // Process keyboard input
-        if (this.keys.left) this.movement.x -= 1;
-        if (this.keys.right) this.movement.x += 1;
-        if (this.keys.up) this.movement.y -= 1;
-        if (this.keys.down) this.movement.y += 1;
+        if (keys.left) x -= 1;
+        if (keys.right) x += 1;
+        if (keys.up) y -= 1;
+        if (keys.down) y += 1;
 
         // Normalize keyboard diagonal movement
-        if (this.movement.x !== 0 && this.movement.y !== 0) {
-            const length = Math.sqrt(this.movement.x * this.movement.x + this.movement.y * this.movement.y);
-            this.movement.x /= length;
-            this.movement.y /= length;
+        if (x !== 0 && y !== 0) {
+            const length = Math.sqrt(x * x + y * y);
+            x /= length;
+            y /= length;
         }
 
         // Process touch/joystick input (overrides keyboard if active)
-        if (this.touch.active) {
-            const dx = this.touch.currentX - this.touch.startX;
-            const dy = this.touch.currentY - this.touch.startY;
+        if (touch.active) {
+            const dx = touch.currentX - touch.startX;
+            const dy = touch.currentY - touch.startY;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance > 0) {
-                // Normalize to max radius
                 const clampedDistance = Math.min(distance, JOYSTICK_MAX_RADIUS);
                 const normalizedDistance = clampedDistance / JOYSTICK_MAX_RADIUS;
 
-                // Apply dead zone
                 if (normalizedDistance > JOYSTICK_DEAD_ZONE) {
                     const adjustedMagnitude = (normalizedDistance - JOYSTICK_DEAD_ZONE) / (1 - JOYSTICK_DEAD_ZONE);
-                    this.movement.x = (dx / distance) * adjustedMagnitude;
-                    this.movement.y = (dy / distance) * adjustedMagnitude;
+                    x = (dx / distance) * adjustedMagnitude;
+                    y = (dy / distance) * adjustedMagnitude;
                 }
             }
         }
+
+        return { x, y };
+    },
+
+    update() {
+        // Update Player 1 movement
+        this.p1Movement = this.calculateMovement(this.p1Keys, this.p1Touch);
+
+        // Update Player 2 movement (only in two-player mode)
+        if (this.twoPlayerMode) {
+            this.p2Movement = this.calculateMovement(this.p2Keys, this.p2Touch);
+        } else {
+            this.p2Movement = { x: 0, y: 0 };
+        }
+    },
+
+    // Get touch state for joystick rendering
+    getP1Touch() {
+        return this.p1Touch;
+    },
+
+    getP2Touch() {
+        return this.p2Touch;
     }
 };

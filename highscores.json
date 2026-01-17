@@ -1,0 +1,74 @@
+[
+  {
+    "name": "VIALEO",
+    "score": 2007,
+    "difficulty": "medium",
+    "level": "beach",
+    "eggsDelivered": 42,
+    "gameTime": 292,
+    "date": "2026-01-17T21:38:47.089058"
+  },
+  {
+    "name": "FARMOR",
+    "score": 1842,
+    "difficulty": "medium",
+    "level": "mountain",
+    "eggsDelivered": 41,
+    "gameTime": 185,
+    "date": "2026-01-17T22:25:44.988510"
+  },
+  {
+    "name": "LEOFAR",
+    "score": 1806,
+    "difficulty": "medium",
+    "level": "cave",
+    "eggsDelivered": 45,
+    "gameTime": 238,
+    "date": "2026-01-17T21:18:36.370374"
+  },
+  {
+    "name": "FAR",
+    "score": 1741,
+    "difficulty": "hard",
+    "level": "cave",
+    "eggsDelivered": 41,
+    "gameTime": 227,
+    "date": "2026-01-17T21:33:04.031147"
+  },
+  {
+    "name": "FAR",
+    "score": 1482,
+    "difficulty": "medium",
+    "level": "beach",
+    "eggsDelivered": 22,
+    "gameTime": 221,
+    "date": "2026-01-17T22:17:52.971592"
+  },
+  {
+    "name": "FAR",
+    "score": 1327,
+    "difficulty": "easy",
+    "level": "mountain",
+    "eggsDelivered": 30,
+    "gameTime": 162,
+    "date": "2026-01-17T21:00:24.534319"
+  },
+  {
+    "name": "VIALEO",
+    "score": 1198,
+    "difficulty": "hard",
+    "level": "beach",
+    "eggsDelivered": 27,
+    "gameTime": 194,
+    "date": "2026-01-17T21:43:21.410195"
+  },
+  {
+    "name": "TEST",
+    "score": 100,
+    "difficulty": "medium",
+    "level": "mountain",
+    "eggsDelivered": 0,
+    "gameTime": 0,
+    "date": "2026-01-17T20:50:39.343056"
+  }
+]

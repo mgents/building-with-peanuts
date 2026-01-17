@@ -27,17 +27,28 @@ class Egg {
         return Date.now() < this.graceEndTime;
     }
 
-    get crackProgress() {
-        return Math.min(1, this.timeOnGround / EGG_CRACK_TIME);
+    // v2: crackProgress now uses configurable crack time
+    getCrackProgress(crackTime = EGG_CRACK_TIME) {
+        return Math.min(1, this.timeOnGround / crackTime);
     }
 
-    update(dt) {
+    // Legacy getter for backwards compatibility
+    get crackProgress() {
+        return this.getCrackProgress(EGG_CRACK_TIME);
+    }
+
+    // v2: update now accepts optional crack time from difficulty settings
+    update(dt, crackTime = EGG_CRACK_TIME) {
+        // Store current crack time for render use
+        this._currentCrackTime = crackTime;
+
         // Wobble animation - faster as crack approaches
-        const urgency = 1 + this.crackProgress * 3;
-        this.wobbleAngle = Math.sin(Date.now() * 0.01 * this.wobbleSpeed * urgency) * (0.1 + this.crackProgress * 0.2);
+        const progress = this.getCrackProgress(crackTime);
+        const urgency = 1 + progress * 3;
+        this.wobbleAngle = Math.sin(Date.now() * 0.01 * this.wobbleSpeed * urgency) * (0.1 + progress * 0.2);
 
         // Check if egg should crack
-        if (this.timeOnGround >= EGG_CRACK_TIME && !this.cracked) {
+        if (this.timeOnGround >= crackTime && !this.cracked) {
             this.cracked = true;
             return true; // Signal that egg cracked
         }
@@ -78,9 +89,12 @@ class Egg {
         ctx.arc(4, 2, 2, 0, Math.PI * 2);
         ctx.fill();
 
+        // Use stored crack time or default
+        const progress = this.getCrackProgress(this._currentCrackTime || EGG_CRACK_TIME);
+
         // Crack warning indicator
-        if (this.crackProgress > 0.5) {
-            const warningAlpha = (this.crackProgress - 0.5) * 2;
+        if (progress > 0.5) {
+            const warningAlpha = (progress - 0.5) * 2;
             ctx.strokeStyle = `rgba(255, 0, 0, ${warningAlpha})`;
             ctx.lineWidth = 2;
 
@@ -93,11 +107,11 @@ class Egg {
         }
 
         // Timer indicator (circular progress)
-        if (this.crackProgress > 0) {
+        if (progress > 0) {
             ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, this.radius + 5, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * this.crackProgress));
+            ctx.arc(0, 0, this.radius + 5, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * progress));
             ctx.stroke();
         }
 

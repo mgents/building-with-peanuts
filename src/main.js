@@ -1,13 +1,23 @@
 // ===========================================
-// MAIN GAME LOOP - Dragon Nest Defender
+// MAIN GAME LOOP - Dragon Nest Defender (v2)
 // ===========================================
 
 const Game = {
     // Game state
     state: GAME_STATES.MENU,
 
+    // v2: Game settings
+    numPlayers: 1,
+    selectedLevel: 'mountain',
+    selectedDifficulty: 'medium',
+
+    // Highscore tracking
+    lastScoreBreakdown: null,
+    wasWin: false,
+
     // Entities
     dragon: null,
+    dragon2: null, // Player 2 dragon
     nests: [],
     eggs: [],
     invaders: [],
@@ -20,10 +30,33 @@ const Game = {
     // Score
     score: 0,
 
+    // v2: Eggs collected (win condition)
+    eggsCollected: 0,
+    eggsToWin: 50,
+
+    // Timing settings (calculated based on difficulty and player count)
+    eggCrackTime: 10000,
+    spawnInterval: 10000,
+
+    // Comprehensive scoring statistics
+    stats: {
+        eggsDelivered: 0,
+        eggsLost: 0,              // Eggs that cracked
+        eggsDropped: 0,           // Eggs dropped when scared
+        totalDeliveryTime: 0,     // Sum of all delivery times (for average)
+        fastDeliveries: 0,        // Deliveries under 5 seconds
+        nestsRepaired: 0,         // Number of times nest crossed to healthy
+        totalDamageTaken: 0,      // Total damage taken by all nests
+        invadersScared: 0,        // Total invaders scared away
+        powerUpsCollected: 0,     // Power-ups collected
+        gameStartTime: 0,         // When game started
+        lastEggPickupTime: 0      // For tracking delivery speed
+    },
+
     // Timing
     lastTime: 0,
 
-    // Background - pre-generated static elements
+    // Background - pre-generated static elements (used as fallback)
     bgGenerated: false,
     bgRocks: [],
     bgGrassTufts: [],
@@ -33,11 +66,14 @@ const Game = {
     animTime: 0,
 
     init() {
-        // Generate static background elements once
+        // Generate static background elements once (fallback)
         this.generateBackground();
 
         // Initialize input system
         Input.init();
+
+        // Initialize audio system
+        Audio.init();
 
         // Initialize screens
         Screens.init();
@@ -103,38 +139,99 @@ const Game = {
 
         const unlock = () => {
             if (audioUnlocked) return;
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const buffer = audioCtx.createBuffer(1, 1, 22050);
-            const source = audioCtx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioCtx.destination);
-            source.start(0);
+
+            // Resume the Audio system's context (the one actually used for sounds)
+            // Music will only start when user explicitly clicks the music toggle
+            if (Audio.context && Audio.context.state === 'suspended') {
+                Audio.context.resume();
+            }
+
             audioUnlocked = true;
         };
 
-        canvas.addEventListener('touchstart', unlock, { once: true });
-        canvas.addEventListener('click', unlock, { once: true });
+        // Use capture phase to ensure we get the event before buttons
+        canvas.addEventListener('touchstart', unlock, { capture: true });
+        canvas.addEventListener('click', unlock, { capture: true });
+        canvas.addEventListener('mousedown', unlock, { capture: true });
     },
 
     startGame() {
+        // Get settings from Screens
+        this.numPlayers = Screens.selectedPlayers;
+        this.selectedLevel = Screens.selectedLevel;
+        this.selectedDifficulty = Screens.selectedDifficulty;
+
+        // Apply difficulty settings - fallback to medium if invalid
+        let diff = DIFFICULTY[this.selectedDifficulty];
+        if (!diff) {
+            console.error('Invalid difficulty:', this.selectedDifficulty, '- falling back to medium');
+            this.selectedDifficulty = 'medium';
+            diff = DIFFICULTY['medium'];
+        }
+
+        // Eggs to win based on player count (25 for 1P, 50 for 2P)
+        this.eggsToWin = this.numPlayers === 2 ? EGGS_TO_WIN_2P : EGGS_TO_WIN_1P;
+
+        // Calculate timing based on player count and difficulty
+        const baseTimeout = this.numPlayers === 2 ? BASE_TIMEOUT_2P : BASE_TIMEOUT_1P;
+        const baseSpawnInterval = this.numPlayers === 2 ? BASE_SPAWN_INTERVAL_2P : BASE_SPAWN_INTERVAL_1P;
+        this.eggCrackTime = baseTimeout * diff.eggCrackTimeMultiplier;
+        this.spawnInterval = baseSpawnInterval * diff.invaderSpawnMultiplier;
+
+        // Reset systems
         Meters.reset();
         Spawner.reset();
+        HUD.reset();
         this.score = 0;
+        this.eggsCollected = 0;
         this.powerUp = null;
         this.activePowerUp = null;
         this.activePowerUpEndTime = 0;
 
-        this.dragon = new Dragon(GAME_WIDTH / 2, GAME_HEIGHT / 2);
+        // Reset comprehensive stats
+        this.stats = {
+            eggsDelivered: 0,
+            eggsLost: 0,
+            eggsDropped: 0,
+            totalDeliveryTime: 0,
+            fastDeliveries: 0,
+            nestsRepaired: 0,
+            totalDamageTaken: 0,
+            invadersScared: 0,
+            powerUpsCollected: 0,
+            gameStartTime: Date.now(),
+            lastEggPickupTime: 0
+        };
 
-        this.nests = [
-            new Nest(GAME_WIDTH * 0.25, GAME_HEIGHT * 0.35),
-            new Nest(GAME_WIDTH * 0.75, GAME_HEIGHT * 0.35),
-            new Nest(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.7)
-        ];
+        // Set two-player mode in Input system
+        Input.setTwoPlayerMode(this.numPlayers === 2);
+
+        // Load selected level
+        Level.load(this.selectedLevel);
+
+        // Create dragon(s)
+        if (this.numPlayers === 2) {
+            // Two-player: start on opposite sides
+            this.dragon = new Dragon(GAME_WIDTH * 0.3, GAME_HEIGHT / 2, 1);
+            this.dragon2 = new Dragon(GAME_WIDTH * 0.7, GAME_HEIGHT / 2, 2);
+        } else {
+            this.dragon = new Dragon(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1);
+            this.dragon2 = null;
+        }
+
+        // Create nests based on level (positions are stored as ratios)
+        const nestPositions = Level.current.nestPositions;
+        this.nests = nestPositions.map(pos => new Nest(pos.x * GAME_WIDTH, pos.y * GAME_HEIGHT));
 
         this.eggs = [];
         this.invaders = [];
         this.eggs.push(Spawner.spawnEgg(this.nests));
+
+        // Play start sound and music
+        Audio.resume();
+        Audio.playGameStart();
+        Audio.startMusic();
+
         this.state = GAME_STATES.PLAYING;
     },
 
@@ -156,43 +253,122 @@ const Game = {
 
         Input.update();
         this.updatePowerUpEffects();
-        this.dragon.update(dt, Input.movement);
 
+        // Update player 1 dragon
+        this.dragon.update(dt, Input.p1Movement);
+
+        // Update player 2 dragon if in two-player mode
+        if (this.dragon2) {
+            this.dragon2.update(dt, Input.p2Movement);
+        }
+
+        // Get difficulty settings
+        const diff = DIFFICULTY[this.selectedDifficulty];
+
+        // Update eggs with the calculated crack time
         for (let i = this.eggs.length - 1; i >= 0; i--) {
             const egg = this.eggs[i];
-            const cracked = egg.update(dt);
+            const cracked = egg.update(dt, this.eggCrackTime);
             if (cracked) {
                 Meters.onEggCrack();
+                this.stats.eggsLost++;
+                this.score -= 8; // Penalty for losing an egg
+                Audio.playEggCrack();
                 this.eggs.splice(i, 1);
             }
         }
 
+        // Build dragons array for AI
+        const dragons = [this.dragon];
+        if (this.dragon2) dragons.push(this.dragon2);
+
+        // v2: Apply speed multiplier from difficulty and update with dragons array
+        // Pass all invaders for even nest distribution
         for (const invader of this.invaders) {
-            invader.update(dt, this.nests, { x: this.dragon.x, y: this.dragon.y });
+            if (!invader.banished) {
+                invader.setSpeedMultiplier(diff.invaderSpeedMultiplier);
+                invader.update(dt, this.nests, { x: this.dragon.x, y: this.dragon.y }, dragons, this.invaders);
+            }
+        }
+
+        // Handle banished invaders respawning
+        for (let i = this.invaders.length - 1; i >= 0; i--) {
+            if (this.invaders[i].shouldRespawn()) {
+                // Respawn at edge
+                this.invaders.splice(i, 1);
+            }
         }
 
         if (this.powerUp) {
             this.powerUp.update(dt);
+            // Remove expired power-ups
+            if (this.powerUp.expired) {
+                this.powerUp = null;
+            }
         }
 
         Collision.applySoftRepulsion(this.invaders);
         this.processCollisions(dt);
 
         const phase = Meters.getCurrentPhase();
-        const newEntities = Spawner.update(this.eggs, this.invaders, this.nests, phase);
+        const newEntities = Spawner.update(this.eggs, this.invaders, this.nests, phase, this.spawnInterval);
 
         for (const egg of newEntities.eggs) {
             this.eggs.push(egg);
         }
         for (const invader of newEntities.invaders) {
+            invader.setSpeedMultiplier(diff.invaderSpeedMultiplier);
             this.invaders.push(invader);
         }
 
-        if (Meters.checkWin()) {
-            this.state = GAME_STATES.WIN;
+        // v2: Win condition is based on eggs collected
+        if (this.eggsCollected >= this.eggsToWin) {
+            this.handleGameEnd(true);
         } else if (Meters.checkLose()) {
-            this.state = GAME_STATES.LOSE;
+            this.handleGameEnd(false);
         }
+    },
+
+    handleGameEnd(isWin) {
+        this.wasWin = isWin;
+        this.lastScoreBreakdown = this.calculateFinalScore();
+        Audio.stopMusic();
+
+        if (isWin) {
+            Audio.playWin();
+        } else {
+            Audio.playLose();
+        }
+
+        // Check if this score qualifies for the highscore list
+        if (Highscores.isHighscore(this.lastScoreBreakdown.finalScore)) {
+            // Show name entry screen
+            Screens.resetNameEntry();
+            this.state = GAME_STATES.NAME_ENTRY;
+        } else {
+            // Show regular win/lose screen
+            this.state = isWin ? GAME_STATES.WIN : GAME_STATES.LOSE;
+        }
+    },
+
+    async submitHighscore(name) {
+        const sb = this.lastScoreBreakdown;
+        await Highscores.addScore(
+            name,
+            sb.finalScore,
+            this.selectedDifficulty,
+            this.selectedLevel,
+            sb.stats.eggsDelivered,
+            sb.gameTime
+        );
+
+        // Transition to win/lose screen
+        this.state = this.wasWin ? GAME_STATES.WIN : GAME_STATES.LOSE;
+    },
+
+    skipHighscore() {
+        // Skip name entry and go to win/lose screen
+        this.state = this.wasWin ? GAME_STATES.WIN : GAME_STATES.LOSE;
     },
 
     updatePowerUpEffects() {
@@ -211,71 +387,117 @@ const Game = {
     },
 
     processCollisions(dt) {
-        const pickedEgg = Collision.checkDragonEggPickup(this.dragon, this.eggs);
-        if (pickedEgg) {
-            this.dragon.pickupEgg(pickedEgg.id);
-            const idx = this.eggs.indexOf(pickedEgg);
-            if (idx >= 0) this.eggs.splice(idx, 1);
-        }
+        // Process collisions for all dragons
+        const dragons = [this.dragon];
+        if (this.dragon2) dragons.push(this.dragon2);
 
-        const overlappingNest = Collision.checkDragonNestOverlap(this.dragon, this.nests);
-        if (overlappingNest) {
-            if (this.dragon.carrying !== null) {
-                this.dragon.dropEgg();
-                overlappingNest.addEgg();
-                Meters.onEggDelivered();
-                this.score += 10;
-
-                if (Spawner.trackSuccessfulAction() && !this.powerUp) {
-                    this.powerUp = Spawner.spawnPowerUp(this.nests, this.dragon);
-                }
+        for (const dragon of dragons) {
+            // Egg pickup
+            const pickedEgg = Collision.checkDragonEggPickup(dragon, this.eggs);
+            if (pickedEgg) {
+                dragon.pickupEgg(pickedEgg.id);
+                dragon.eggPickupTime = Date.now(); // Track when egg was picked up
+                Audio.playEggPickup();
+                const idx = this.eggs.indexOf(pickedEgg);
+                if (idx >= 0) this.eggs.splice(idx, 1);
             }
 
-            if (overlappingNest.health < NEST_MAX_HEALTH) {
-                const crossedToHealthy = overlappingNest.repair(NEST_REPAIR_PER_SEC * dt);
-                if (crossedToHealthy) {
-                    Meters.onRepairToHealthy();
-                    this.score += 15;
+            // Nest overlap (deliver eggs, repair)
+            const overlappingNest = Collision.checkDragonNestOverlap(dragon, this.nests);
+            if (overlappingNest) {
+                if (dragon.carrying !== null) {
+                    // Calculate delivery time for scoring
+                    const deliveryTime = (Date.now() - (dragon.eggPickupTime || Date.now())) / 1000;
+                    const isFastDelivery = deliveryTime < 5; // Under 5 seconds
+
+                    dragon.dropEgg();
+                    overlappingNest.addEgg();
+                    Meters.onEggDelivered();
+                    this.eggsCollected++;
+                    this.stats.eggsDelivered++;
+                    this.stats.totalDeliveryTime += deliveryTime;
+
+                    // Score based on delivery speed
+                    let deliveryScore = 10;
+                    if (isFastDelivery) {
+                        deliveryScore = 25; // Bonus for fast delivery
+                        this.stats.fastDeliveries++;
+                    } else if (deliveryTime < 8) {
+                        deliveryScore = 15; // Medium speed bonus
+                    }
+                    this.score += deliveryScore;
+
+                    Audio.playEggDeliver();
 
                     if (Spawner.trackSuccessfulAction() && !this.powerUp) {
-                        this.powerUp = Spawner.spawnPowerUp(this.nests, this.dragon);
+                        this.powerUp = Spawner.spawnPowerUp(this.nests, dragon, this.eggCrackTime);
+                        if (this.powerUp) Audio.playPowerUpSpawn();
+                    }
+                }
+
+                if (overlappingNest.health < NEST_MAX_HEALTH) {
+                    const crossedToHealthy = overlappingNest.repair(NEST_REPAIR_PER_SEC * dt);
+                    if (crossedToHealthy) {
+                        Meters.onRepairToHealthy();
+                        this.stats.nestsRepaired++;
+                        this.score += 20; // Bonus for fully repairing a nest
+
+                        if (Spawner.trackSuccessfulAction() && !this.powerUp) {
+                            this.powerUp = Spawner.spawnPowerUp(this.nests, dragon, this.eggCrackTime);
+                            if (this.powerUp) Audio.playPowerUpSpawn();
+                        }
                     }
                 }
             }
-        }
 
-        const scaredInvaders = Collision.checkDragonInvaderCollisions(this.dragon, this.invaders);
-        for (const invader of scaredInvaders) {
-            const giveBonus = invader.scare(this.dragon.x, this.dragon.y);
-            if (giveBonus) {
-                Meters.onScare();
-                this.score += 5;
+            // Scare invaders
+            const scaredInvaders = Collision.checkDragonInvaderCollisions(dragon, this.invaders);
+            for (const invader of scaredInvaders) {
+                if (invader.banished) continue;
 
-                if (Spawner.trackSuccessfulAction() && !this.powerUp) {
-                    this.powerUp = Spawner.spawnPowerUp(this.nests, this.dragon);
+                const giveBonus = invader.scare(dragon.x, dragon.y);
+                Audio.playInvaderScared();
+
+                if (giveBonus) {
+                    Meters.onScare();
+                    this.stats.invadersScared++;
+                    this.score += 5;
+
+                    if (Spawner.trackSuccessfulAction() && !this.powerUp) {
+                        this.powerUp = Spawner.spawnPowerUp(this.nests, dragon, this.eggCrackTime);
+                        if (this.powerUp) Audio.playPowerUpSpawn();
+                    }
+                }
+
+                if (dragon.carrying !== null) {
+                    const droppedEggId = dragon.dropEgg();
+                    const droppedEgg = new Egg(dragon.x, dragon.y, droppedEggId);
+                    droppedEgg.setDropped();
+                    this.eggs.push(droppedEgg);
+                    this.stats.eggsDropped++;
+                    this.score -= 3; // Small penalty for dropping egg
+                    Meters.onEggDrop();
                 }
             }
 
-            if (this.dragon.carrying !== null) {
-                const droppedEggId = this.dragon.dropEgg();
-                const droppedEgg = new Egg(this.dragon.x, this.dragon.y, droppedEggId);
-                droppedEgg.setDropped();
-                this.eggs.push(droppedEgg);
-                Meters.onEggDrop();
+            // Power-up pickup
+            if (Collision.checkDragonPowerUpPickup(dragon, this.powerUp)) {
+                this.collectPowerUp(this.powerUp, dragon);
+                this.powerUp = null;
             }
         }
 
-        if (Collision.checkDragonPowerUpPickup(this.dragon, this.powerUp)) {
-            this.collectPowerUp(this.powerUp);
-            this.powerUp = null;
-        }
-
+        // Invader harassment (nests take damage)
         let harassingCount = 0;
         for (const invader of this.invaders) {
+            if (invader.banished) continue;
+
             if (invader.state === INVADER_STATES.HARASS && invader.targetNest) {
                 const nest = invader.targetNest;
-                if (Collision.checkInvaderNestOverlap(invader, nest)) {
-                    nest.takeDamage(NEST_DAMAGE_PER_SEC * dt);
+                if (!nest.shielded && Collision.checkInvaderNestOverlap(invader, nest)) {
+                    const damage = NEST_DAMAGE_PER_SEC * dt;
+                    nest.takeDamage(damage);
+                    this.stats.totalDamageTaken += damage;
                     harassingCount++;
                 }
             }
@@ -284,21 +506,96 @@ const Game = {
         if (harassingCount > 0) {
             Meters.onHarass(dt, harassingCount);
         }
+
+        // Check for destroyed nests (health reached 0)
+        for (let i = this.nests.length - 1; i >= 0; i--) {
+            if (this.nests[i].health <= 0) {
+                // Nest destroyed - adds 35% danger
+                Meters.onNestLost();
+                Audio.playNestDamage();
+
+                // Remove the nest
+                this.nests.splice(i, 1);
+
+                // Redirect any invaders targeting this nest
+                for (const invader of this.invaders) {
+                    if (invader.targetNest && invader.targetNest.health <= 0) {
+                        invader.targetNest = null;
+                    }
+                }
+            }
+        }
     },
 
-    collectPowerUp(powerUp) {
+    // Calculate final score breakdown
+    calculateFinalScore() {
+        const gameTime = (Date.now() - this.stats.gameStartTime) / 1000;
+        const avgDeliveryTime = this.stats.eggsDelivered > 0
+            ? this.stats.totalDeliveryTime / this.stats.eggsDelivered
+            : 0;
+
+        // Calculate bonuses
+        const deliveryBonus = this.stats.eggsDelivered * 10;
+        const speedBonus = this.stats.fastDeliveries * 15;
+        const repairBonus = this.stats.nestsRepaired * 20;
+        const scareBonus = this.stats.invadersScared * 5;
+        const powerUpBonus = this.stats.powerUpsCollected * 20;
+
+        // Calculate penalties
+        const eggsLostPenalty = this.stats.eggsLost * 8;
+        const droppedPenalty = this.stats.eggsDropped * 3;
+        const damagePenalty = Math.floor(this.stats.totalDamageTaken / 10);
+
+        // Time bonus (faster completion = more points)
+        const timeBonus = Math.max(0, Math.floor(300 - gameTime / 2));
+
+        const finalScore = Math.max(0,
+            deliveryBonus + speedBonus + repairBonus + scareBonus + powerUpBonus + timeBonus
+            - eggsLostPenalty - droppedPenalty - damagePenalty
+        );
+
+        return {
+            gameTime: Math.floor(gameTime),
+            avgDeliveryTime: avgDeliveryTime.toFixed(1),
+            deliveryBonus,
+            speedBonus,
+            repairBonus,
+            scareBonus,
+            powerUpBonus,
+            timeBonus,
+            eggsLostPenalty,
+            droppedPenalty,
+            damagePenalty,
+            finalScore,
+            stats: { ...this.stats }
+        };
+    },
+
+    collectPowerUp(powerUp, dragon) {
         this.activePowerUp = powerUp.type;
+        this.stats.powerUpsCollected++;
+        Audio.playPowerUpCollect();
 
         switch (powerUp.type) {
             case POWERUP_TYPES.WING_BOOST:
-                this.dragon.activateSpeedBoost();
+                // Apply to collecting dragon (and P2 if exists in co-op)
+                dragon.activateSpeedBoost();
+                if (this.dragon2 && dragon === this.dragon) {
+                    this.dragon2.activateSpeedBoost();
+                } else if (this.dragon2 && dragon === this.dragon2) {
+                    this.dragon.activateSpeedBoost();
+                }
                 this.activePowerUpEndTime = Date.now() + WING_BOOST_DURATION;
+                Audio.playWingBoost();
                 break;
 
             case POWERUP_TYPES.BIG_SCARE:
                 for (const invader of this.invaders) {
-                    invader.scare(this.dragon.x, this.dragon.y);
+                    if (!invader.banished) {
+                        invader.scare(dragon.x, dragon.y);
+                    }
                 }
+                Audio.playBigScare();
                 this.activePowerUp = null;
                 break;
 
@@ -307,6 +604,25 @@ const Game = {
                     nest.shielded = true;
                 }
                 this.activePowerUpEndTime = Date.now() + NEST_SHIELD_DURATION;
+                Audio.playNestShield();
+                break;
+
+            case POWERUP_TYPES.PERMANENT_BANISH:
+                // Banish all current invaders temporarily
+                for (const invader of this.invaders) {
+                    if (!invader.banished) {
+                        invader.banish();
+                    }
+                }
+                Audio.playPermanentBanish();
+                this.activePowerUp = null;
+                break;
+
+            case POWERUP_TYPES.DANGER_REDUCE:
+                // Reduce danger level by 20%
+                Meters.reduceDanger(DANGER_REDUCE_AMOUNT);
+                Audio.playNestShield(); // Reuse healing-like sound
+                this.activePowerUp = null;
                 break;
         }
 
@@ -314,20 +630,55 @@ const Game = {
     },
 
     render() {
-        // Draw retro-style background
-        this.renderRetroBackground();
+        // Draw background based on state
+        if (this.state === GAME_STATES.PLAYING || this.state === GAME_STATES.WIN ||
+            this.state === GAME_STATES.LOSE || this.state === GAME_STATES.NAME_ENTRY) {
+            // Use level-specific background during gameplay and end screens
+            Level.render(ctx, this.animTime);
+        } else {
+            // Use default retro background for menus
+            this.renderRetroBackground();
+        }
 
         switch (this.state) {
             case GAME_STATES.MENU:
                 Screens.renderMenu(ctx,
+                    () => this.state = GAME_STATES.PLAYER_SELECT,
+                    () => this.state = GAME_STATES.INSTRUCTIONS,
+                    () => this.state = GAME_STATES.HIGHSCORES
+                );
+                break;
+
+            case GAME_STATES.PLAYER_SELECT:
+                Screens.renderPlayerSelect(ctx,
+                    () => this.state = GAME_STATES.LEVEL_SELECT,
+                    () => this.state = GAME_STATES.MENU
+                );
+                break;
+
+            case GAME_STATES.LEVEL_SELECT:
+                Screens.renderLevelSelect(ctx,
+                    () => this.state = GAME_STATES.DIFFICULTY_SELECT,
+                    () => this.state = GAME_STATES.PLAYER_SELECT
+                );
+                break;
+
+            case GAME_STATES.DIFFICULTY_SELECT:
+                Screens.renderDifficultySelect(ctx,
                     () => this.startGame(),
-                    () => this.state = GAME_STATES.INSTRUCTIONS
+                    () => this.state = GAME_STATES.LEVEL_SELECT
                 );
                 break;
 
             case GAME_STATES.INSTRUCTIONS:
                 Screens.renderInstructions(ctx,
-                    () => this.startGame()
+                    () => this.state = GAME_STATES.MENU
+                );
+                break;
+
+            case GAME_STATES.HIGHSCORES:
+                Screens.renderHighscores(ctx,
+                    () => this.state = GAME_STATES.MENU
                 );
                 break;
 
@@ -335,18 +686,28 @@ const Game = {
                 this.renderGameplay();
                 break;
 
+            case GAME_STATES.NAME_ENTRY:
+                this.renderGameplay();
+                Screens.renderNameEntry(ctx, this.lastScoreBreakdown, this.wasWin,
+                    (name) => this.submitHighscore(name),
+                    () => this.skipHighscore()
+                );
+                break;
+
             case GAME_STATES.WIN:
                 this.renderGameplay();
-                Screens.renderWin(ctx, this.score,
-                    () => this.startGame(),
+                Screens.renderWin(ctx, this.score, this.eggsCollected,
+                    this.lastScoreBreakdown || this.calculateFinalScore(),
+                    () => this.state = GAME_STATES.PLAYER_SELECT,
                     () => this.state = GAME_STATES.MENU
                 );
                 break;
 
             case GAME_STATES.LOSE:
                 this.renderGameplay();
-                Screens.renderLose(ctx, this.score,
-                    () => this.startGame(),
+                Screens.renderLose(ctx, this.score, this.eggsCollected,
+                    this.lastScoreBreakdown || this.calculateFinalScore(),
+                    () => this.state = GAME_STATES.PLAYER_SELECT,
                     () => this.state = GAME_STATES.MENU
                 );
                 break;
@@ -580,19 +941,29 @@ const Game = {
             this.powerUp.render(ctx);
         }
 
-        // Render invaders
+        // Render invaders (skip banished ones or render them faded)
         for (const invader of this.invaders) {
-            invader.render(ctx);
+            if (!invader.banished) {
+                invader.render(ctx);
+            }
         }
 
-        // Render dragon (on top)
+        // Render dragon(s) on top
         this.dragon.render(ctx);
+        if (this.dragon2) {
+            this.dragon2.render(ctx);
+        }
 
-        // Render joystick
-        Joystick.render(ctx);
+        // Render joystick(s)
+        Joystick.render(ctx, Input.getP1Touch(), 1);
+        if (this.numPlayers === 2) {
+            Joystick.render(ctx, Input.getP2Touch(), 2);
+        }
 
-        // Render HUD
-        HUD.render(ctx, Meters.calm, Meters.danger, this.score, this.activePowerUp, this.activePowerUpEndTime);
+        // Render HUD with egg counter
+        HUD.render(ctx, Meters.danger, this.score,
+            this.activePowerUp, this.activePowerUpEndTime,
+            this.eggsCollected, this.eggsToWin);
     }
 };
 
