@@ -41,16 +41,31 @@ function resizeCanvas() {
     // Calculate scale for input translation
     canvasScale = width / GAME_WIDTH;
 
-    // Calculate offset (canvas is centered)
+    // Calculate offset (canvas is horizontally centered, top-aligned)
     canvasOffsetX = (window.innerWidth - width) / 2;
-    canvasOffsetY = (window.innerHeight - height) / 2;
+    canvasOffsetY = 0; // Canvas is top-aligned now
+
+    // Update canvas top margin to vertically center on larger screens
+    // but stay at top on mobile to avoid issues with dynamic viewport
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isMobile && window.innerHeight > height) {
+        const topMargin = (window.innerHeight - height) / 2;
+        canvas.style.top = topMargin + 'px';
+        canvasOffsetY = topMargin;
+    } else {
+        canvas.style.top = '0px';
+        canvasOffsetY = 0;
+    }
 }
 
 // Convert screen coordinates to game coordinates
 function screenToGame(screenX, screenY) {
+    // Use getBoundingClientRect for accurate canvas position
+    // This handles all CSS transforms and positioning correctly
+    const rect = canvas.getBoundingClientRect();
     return {
-        x: (screenX - canvasOffsetX) / canvasScale,
-        y: (screenY - canvasOffsetY) / canvasScale
+        x: (screenX - rect.left) / canvasScale,
+        y: (screenY - rect.top) / canvasScale
     };
 }
 

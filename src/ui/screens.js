@@ -956,18 +956,34 @@ const Screens = {
 
         this.buttons.push({ id, x, y, width, height, callback });
 
-        // Card background with level theme gradient on hover
-        const bgGrad = ctx.createLinearGradient(x, y, x, y + height);
-        if (isHovered) {
-            bgGrad.addColorStop(0, level.color);
-            bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-        } else {
-            bgGrad.addColorStop(0, 'rgba(40, 40, 60, 0.9)');
-            bgGrad.addColorStop(1, 'rgba(25, 25, 45, 0.9)');
-        }
-        ctx.fillStyle = bgGrad;
+        // Card outer background
+        ctx.fillStyle = 'rgba(20, 20, 30, 0.95)';
         this.roundRect(ctx, x, y, width, height, 12);
         ctx.fill();
+
+        // Render mini level preview inside the card
+        const previewMargin = 8;
+        const previewX = x + previewMargin;
+        const previewY = y + previewMargin;
+        const previewWidth = width - previewMargin * 2;
+        const previewHeight = 80;
+
+        // Clip to preview area with rounded corners
+        ctx.save();
+        ctx.beginPath();
+        this.roundRect(ctx, previewX, previewY, previewWidth, previewHeight, 8);
+        ctx.clip();
+
+        // Render level-specific mini preview
+        this.renderLevelMiniPreview(ctx, level.id, previewX, previewY, previewWidth, previewHeight);
+
+        ctx.restore();
+
+        // Preview border
+        ctx.strokeStyle = isHovered ? level.accent : 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        this.roundRect(ctx, previewX, previewY, previewWidth, previewHeight, 8);
+        ctx.stroke();
 
         // Glow effect on hover
         if (isHovered) {
@@ -981,32 +997,190 @@ const Screens = {
             ctx.restore();
         }
 
-        // Border
+        // Card border
         ctx.strokeStyle = isHovered ? level.accent : 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = isHovered ? 3 : 2;
         this.roundRect(ctx, x, y, width, height, 12);
         ctx.stroke();
 
-        // Icon
-        ctx.font = '48px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(level.icon, x + width / 2, y + 60);
-
-        // Name
+        // Name below preview
         ctx.fillStyle = COLORS.UI_TEXT;
-        ctx.font = 'bold 18px Arial';
-        ctx.fillText(level.name, x + width / 2, y + 100);
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(level.name, x + width / 2, y + previewHeight + 30);
 
         // Description
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.font = '12px Arial';
-        ctx.fillText(level.desc, x + width / 2, y + 120);
+        ctx.font = '11px Arial';
+        ctx.fillText(level.desc, x + width / 2, y + previewHeight + 48);
 
         // "Click to Select" indicator when hovered
         if (isHovered) {
             ctx.fillStyle = level.accent;
             ctx.font = 'bold 12px Arial';
             ctx.fillText('▶ CLICK TO SELECT', x + width / 2, y + height - 12);
+        }
+    },
+
+    // Render a mini preview of a level inside a card
+    renderLevelMiniPreview(ctx, levelId, x, y, width, height) {
+        const levelData = LEVELS[levelId];
+        if (!levelData) return;
+
+        const c = levelData.colors;
+
+        // Sky gradient
+        if (levelId === 'mountain') {
+            const skyGrad = ctx.createLinearGradient(x, y, x, y + height);
+            skyGrad.addColorStop(0, '#3a5a8a');
+            skyGrad.addColorStop(0.5, '#6a9ad0');
+            skyGrad.addColorStop(1, '#8ab4e0');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(x, y, width, height);
+
+            // Distant mountains
+            ctx.fillStyle = 'rgba(100, 130, 160, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(x, y + height * 0.7);
+            ctx.lineTo(x + width * 0.2, y + height * 0.4);
+            ctx.lineTo(x + width * 0.4, y + height * 0.6);
+            ctx.lineTo(x + width * 0.6, y + height * 0.35);
+            ctx.lineTo(x + width * 0.8, y + height * 0.5);
+            ctx.lineTo(x + width, y + height * 0.45);
+            ctx.lineTo(x + width, y + height);
+            ctx.lineTo(x, y + height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Snow caps
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(x + width * 0.6, y + height * 0.35);
+            ctx.lineTo(x + width * 0.65, y + height * 0.45);
+            ctx.lineTo(x + width * 0.55, y + height * 0.45);
+            ctx.closePath();
+            ctx.fill();
+
+            // Grass area
+            ctx.fillStyle = c.grass;
+            ctx.fillRect(x, y + height * 0.75, width, height * 0.25);
+
+        } else if (levelId === 'beach') {
+            const skyGrad = ctx.createLinearGradient(x, y, x, y + height);
+            skyGrad.addColorStop(0, '#60b8e8');
+            skyGrad.addColorStop(0.6, '#87ceeb');
+            skyGrad.addColorStop(1, '#a0e0f0');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(x, y, width, height);
+
+            // Sun
+            ctx.fillStyle = '#fff8dc';
+            ctx.beginPath();
+            ctx.arc(x + width - 25, y + 20, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Water
+            ctx.fillStyle = c.water;
+            ctx.fillRect(x, y + height * 0.5, width, height * 0.2);
+
+            // Sand
+            ctx.fillStyle = c.grass;
+            ctx.fillRect(x, y + height * 0.7, width, height * 0.3);
+
+            // Palm tree silhouette
+            ctx.fillStyle = '#228b22';
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y + height * 0.5);
+            ctx.lineTo(x + 10, y + height * 0.4);
+            ctx.lineTo(x + 20, y + height * 0.45);
+            ctx.lineTo(x + 30, y + height * 0.4);
+            ctx.lineTo(x + 20, y + height * 0.5);
+            ctx.fill();
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(x + 18, y + height * 0.5, 4, height * 0.2);
+
+        } else if (levelId === 'forest') {
+            const skyGrad = ctx.createLinearGradient(x, y, x, y + height);
+            skyGrad.addColorStop(0, '#0a1a0a');
+            skyGrad.addColorStop(0.5, '#1a4a1a');
+            skyGrad.addColorStop(1, '#2a5a2a');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(x, y, width, height);
+
+            // Tree canopy silhouettes
+            ctx.fillStyle = 'rgba(10, 30, 10, 0.8)';
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.arc(x + i * (width / 4), y + 10, 25, 0, Math.PI);
+                ctx.fill();
+            }
+
+            // Light rays
+            ctx.save();
+            ctx.globalAlpha = 0.15;
+            ctx.fillStyle = 'rgba(200, 255, 150, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(x + width * 0.3, y);
+            ctx.lineTo(x + width * 0.35, y);
+            ctx.lineTo(x + width * 0.5, y + height);
+            ctx.lineTo(x + width * 0.4, y + height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // Grass
+            ctx.fillStyle = c.grass;
+            ctx.fillRect(x, y + height * 0.7, width, height * 0.3);
+
+            // Mushroom
+            ctx.fillStyle = '#ff6347';
+            ctx.beginPath();
+            ctx.ellipse(x + width * 0.7, y + height * 0.75, 6, 4, 0, Math.PI, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f5f5dc';
+            ctx.fillRect(x + width * 0.7 - 2, y + height * 0.75, 4, 6);
+
+        } else if (levelId === 'cave') {
+            const skyGrad = ctx.createLinearGradient(x, y, x, y + height);
+            skyGrad.addColorStop(0, '#050510');
+            skyGrad.addColorStop(0.5, '#10102a');
+            skyGrad.addColorStop(1, '#1a1a40');
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(x, y, width, height);
+
+            // Stalactites
+            ctx.fillStyle = 'rgba(50, 40, 70, 0.8)';
+            for (let i = 0; i < 6; i++) {
+                const stalX = x + 15 + i * (width / 6);
+                const stalLen = 15 + (i % 3) * 8;
+                ctx.beginPath();
+                ctx.moveTo(stalX - 4, y);
+                ctx.lineTo(stalX, y + stalLen);
+                ctx.lineTo(stalX + 4, y);
+                ctx.fill();
+            }
+
+            // Glowing crystals
+            const crystalColors = ['#9370db', '#00ffff', '#ff00ff'];
+            for (let i = 0; i < 4; i++) {
+                ctx.save();
+                ctx.shadowColor = crystalColors[i % 3];
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = crystalColors[i % 3];
+                const crystalX = x + 30 + i * (width / 4);
+                const crystalY = y + height * 0.6 + (i % 2) * 10;
+                ctx.beginPath();
+                ctx.moveTo(crystalX, crystalY - 12);
+                ctx.lineTo(crystalX + 5, crystalY);
+                ctx.lineTo(crystalX - 5, crystalY);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Cave floor
+            ctx.fillStyle = c.grass;
+            ctx.fillRect(x, y + height * 0.8, width, height * 0.2);
         }
     },
 
