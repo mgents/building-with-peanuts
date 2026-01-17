@@ -53,11 +53,19 @@ const Screens = {
     },
 
     onClick(e) {
+        // Don't process menu clicks during gameplay
+        if (typeof Game !== 'undefined' && Game.state === GAME_STATES.PLAYING) {
+            return;
+        }
         const pos = screenToGame(e.clientX, e.clientY);
         this.checkButtonClick(pos.x, pos.y);
     },
 
     onTouch(e) {
+        // Don't process menu clicks during gameplay
+        if (typeof Game !== 'undefined' && Game.state === GAME_STATES.PLAYING) {
+            return;
+        }
         if (e.touches.length > 0) {
             const touch = e.touches[0];
             const pos = screenToGame(touch.clientX, touch.clientY);
