@@ -12,7 +12,7 @@ const Highscores = {
     CACHE_DURATION: 5000, // 5 seconds cache
 
     // Maximum number of highscores to display
-    MAX_SCORES: 9,
+    MAX_SCORES: 10,
 
     // Load highscores from server (with fallback to direct JSON file)
     async load() {

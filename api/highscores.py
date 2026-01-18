@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 
-MAX_SCORES = 9
+MAX_SCORES = 10
 
 # Use Vercel KV or environment variable for persistence
 # For simple demo, we'll use a JSON file approach with fallback
