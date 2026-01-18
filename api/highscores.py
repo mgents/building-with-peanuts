@@ -8,7 +8,7 @@ import json
 import os
 from datetime import datetime
 
-MAX_SCORES = 10
+MAX_SCORES = 9
 
 # Use Vercel KV or environment variable for persistence
 # For simple demo, we'll use a JSON file approach with fallback
@@ -31,8 +31,7 @@ def get_default_scores():
         {"name": "FAR", "score": 1741, "difficulty": "hard", "level": "cave", "eggsDelivered": 41, "gameTime": 227, "date": "2026-01-17T21:33:04.031147"},
         {"name": "FAR", "score": 1482, "difficulty": "medium", "level": "beach", "eggsDelivered": 22, "gameTime": 221, "date": "2026-01-17T22:17:52.971592"},
         {"name": "FAR", "score": 1327, "difficulty": "easy", "level": "mountain", "eggsDelivered": 30, "gameTime": 162, "date": "2026-01-17T21:00:24.534319"},
-        {"name": "VIALEO", "score": 1198, "difficulty": "hard", "level": "beach", "eggsDelivered": 27, "gameTime": 194, "date": "2026-01-17T21:43:21.410195"},
-        {"name": "TEST", "score": 100, "difficulty": "medium", "level": "mountain", "eggsDelivered": 0, "gameTime": 0, "date": "2026-01-17T20:50:39.343056"}
+        {"name": "VIALEO", "score": 1198, "difficulty": "hard", "level": "beach", "eggsDelivered": 27, "gameTime": 194, "date": "2026-01-17T21:43:21.410195"}
     ]
 
 # In-memory storage for the current deployment instance

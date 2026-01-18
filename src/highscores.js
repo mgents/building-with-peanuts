@@ -11,8 +11,8 @@ const Highscores = {
     cacheTime: 0,
     CACHE_DURATION: 5000, // 5 seconds cache
 
-    // Maximum number of highscores
-    MAX_SCORES: 10,
+    // Maximum number of highscores to display
+    MAX_SCORES: 9,
 
     // Load highscores from server (with fallback to direct JSON file)
     async load() {
@@ -54,13 +54,17 @@ const Highscores = {
     },
 
     // Synchronous version for rendering (uses cache)
+    // Returns only top MAX_SCORES entries
     getAll() {
         // Trigger async load in background if not loaded yet
         if (this.cachedScores === null) {
             this.load();
         }
-        // Return cached scores immediately (empty array if not yet loaded)
-        return this.cachedScores || [];
+        // Return only top MAX_SCORES, sorted by score descending
+        const scores = this.cachedScores || [];
+        return scores
+            .sort((a, b) => b.score - a.score)
+            .slice(0, this.MAX_SCORES);
     },
 
     // Add a new score and return its rank (1-based), or 0 if not in top scores

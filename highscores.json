@@ -61,14 +61,5 @@
     "eggsDelivered": 27,
     "gameTime": 194,
     "date": "2026-01-17T21:43:21.410195"
-  },
-  {
-    "name": "TEST",
-    "score": 100,
-    "difficulty": "medium",
-    "level": "mountain",
-    "eggsDelivered": 0,
-    "gameTime": 0,
-    "date": "2026-01-17T20:50:39.343056"
   }
 ]
