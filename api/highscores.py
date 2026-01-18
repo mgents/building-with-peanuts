@@ -28,6 +28,7 @@ def get_default_scores():
     """Return default scores when no persistence is available"""
     return [
         {"name": "VIAFAR", "score": 2269, "difficulty": "medium", "level": "cave", "eggsDelivered": 50, "gameTime": 208, "date": "2026-01-18T04:51:46.989778"},
+        {"name": "LEOFAR", "score": 2219, "difficulty": "medium", "level": "mountain", "eggsDelivered": 50, "gameTime": 0, "date": "2026-01-18T05:00:00.000000"},
         {"name": "VIALEO", "score": 2007, "difficulty": "medium", "level": "beach", "eggsDelivered": 42, "gameTime": 292, "date": "2026-01-17T21:38:47.089058"},
         {"name": "FARMOR", "score": 1842, "difficulty": "medium", "level": "mountain", "eggsDelivered": 41, "gameTime": 185, "date": "2026-01-17T22:25:44.988510"},
         {"name": "LEOFAR", "score": 1806, "difficulty": "medium", "level": "cave", "eggsDelivered": 45, "gameTime": 238, "date": "2026-01-17T21:18:36.370374"},

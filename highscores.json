@@ -9,6 +9,15 @@
     "date": "2026-01-18T04:51:46.989778"
   },
   {
+    "name": "LEOFAR",
+    "score": 2219,
+    "difficulty": "medium",
+    "level": "mountain",
+    "eggsDelivered": 50,
+    "gameTime": 0,
+    "date": "2026-01-18T05:00:00.000000"
+  },
+  {
     "name": "VIALEO",
     "score": 2007,
     "difficulty": "medium",

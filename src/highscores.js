@@ -65,15 +65,16 @@ const Highscores = {
         return allScores;
     },
 
-    // Merge two score arrays, removing duplicates based on name+score+date
+    // Merge two score arrays, removing duplicates based on name+score+level+difficulty
+    // This prevents the same game result from appearing multiple times
     mergeScores(scores1, scores2) {
         const merged = [...scores1];
         const existingKeys = new Set(
-            scores1.map(s => `${s.name}-${s.score}-${s.date}`)
+            scores1.map(s => `${s.name}-${s.score}-${s.level}-${s.difficulty}`)
         );
 
         for (const score of scores2) {
-            const key = `${score.name}-${score.score}-${score.date}`;
+            const key = `${score.name}-${score.score}-${score.level}-${score.difficulty}`;
             if (!existingKeys.has(key)) {
                 merged.push(score);
                 existingKeys.add(key);
