@@ -8,7 +8,9 @@ import json
 import os
 from datetime import datetime
 
-MAX_SCORES = 10
+# No limit on stored scores - save ALL scores
+# Only the client decides how many to display
+MAX_STORED_SCORES = 100  # Reasonable limit for in-memory storage
 
 # Use Vercel KV or environment variable for persistence
 # For simple demo, we'll use a JSON file approach with fallback
@@ -113,8 +115,8 @@ class handler(BaseHTTPRequestHandler):
             scores.append(entry)
             scores.sort(key=lambda x: x['score'], reverse=True)
 
-            # Keep only top scores
-            scores = scores[:MAX_SCORES]
+            # Keep reasonable limit for memory (but save more than just top 10)
+            scores = scores[:MAX_STORED_SCORES]
 
             # Save (in-memory)
             save_scores(scores)
