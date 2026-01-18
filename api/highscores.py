@@ -1,28 +1,23 @@
 """
 Vercel Serverless Function for Dragon Nest Defender Highscores
 Handles GET and POST requests to /api/highscores
+Uses Vercel KV (Redis) for persistent storage
 """
 
 from http.server import BaseHTTPRequestHandler
 import json
 import os
 from datetime import datetime
+import urllib.request
+import urllib.error
 
 # No limit on stored scores - save ALL scores
-# Only the client decides how many to display
-MAX_STORED_SCORES = 100  # Reasonable limit for in-memory storage
+MAX_STORED_SCORES = 500  # Generous limit for KV storage
 
-# Use Vercel KV or environment variable for persistence
-# For simple demo, we'll use a JSON file approach with fallback
-# Note: Vercel serverless functions are stateless, so we need external storage
-
-def get_scores_from_env():
-    """Get scores from environment variable (for Vercel)"""
-    scores_json = os.environ.get('HIGHSCORES_DATA', '[]')
-    try:
-        return json.loads(scores_json)
-    except:
-        return []
+# Vercel KV configuration
+KV_REST_API_URL = os.environ.get('KV_REST_API_URL', '')
+KV_REST_API_TOKEN = os.environ.get('KV_REST_API_TOKEN', '')
+SCORES_KEY = 'dragon_nest_highscores'
 
 def get_default_scores():
     """Return default scores when no persistence is available"""
@@ -38,33 +33,84 @@ def get_default_scores():
         {"name": "VIALEO", "score": 1198, "difficulty": "hard", "level": "beach", "eggsDelivered": 27, "gameTime": 194, "date": "2026-01-17T21:43:21.410195"}
     ]
 
-# In-memory storage for the current deployment instance
-# Note: This will reset when the function cold starts
+def kv_get(key):
+    """Get value from Vercel KV"""
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return None
+
+    try:
+        url = f"{KV_REST_API_URL}/get/{key}"
+        req = urllib.request.Request(url)
+        req.add_header('Authorization', f'Bearer {KV_REST_API_TOKEN}')
+
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            result = data.get('result')
+            if result:
+                return json.loads(result)
+            return None
+    except Exception as e:
+        print(f"KV GET error: {e}")
+        return None
+
+def kv_set(key, value):
+    """Set value in Vercel KV"""
+    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+        return False
+
+    try:
+        # URL-encode the JSON value
+        json_value = json.dumps(value)
+        url = f"{KV_REST_API_URL}/set/{key}"
+
+        # Use POST with body
+        req = urllib.request.Request(url, method='POST')
+        req.add_header('Authorization', f'Bearer {KV_REST_API_TOKEN}')
+        req.add_header('Content-Type', 'application/json')
+
+        body = json.dumps(json_value).encode('utf-8')
+
+        with urllib.request.urlopen(req, body, timeout=5) as response:
+            return response.status == 200
+    except Exception as e:
+        print(f"KV SET error: {e}")
+        return False
+
+# In-memory cache for performance (refreshed from KV on each request)
 _scores_cache = None
+_cache_loaded = False
 
 def load_scores():
-    """Load scores from available storage"""
-    global _scores_cache
+    """Load scores from Vercel KV with fallback to defaults"""
+    global _scores_cache, _cache_loaded
 
-    if _scores_cache is not None:
-        return _scores_cache
-
-    # Try environment variable first
-    scores = get_scores_from_env()
-    if scores:
+    # Try to load from KV
+    scores = kv_get(SCORES_KEY)
+    if scores is not None:
         _scores_cache = scores
+        _cache_loaded = True
         return scores
 
-    # Fall back to default scores
-    _scores_cache = get_default_scores()
+    # If KV is not configured or empty, use defaults
+    if not _cache_loaded:
+        _scores_cache = get_default_scores()
+        _cache_loaded = True
+        # Try to save defaults to KV
+        kv_set(SCORES_KEY, _scores_cache)
+
     return _scores_cache
 
 def save_scores(scores):
-    """Save scores (in-memory for serverless)"""
+    """Save scores to Vercel KV"""
     global _scores_cache
     _scores_cache = scores
-    # Note: In a production app, you'd save to a database like Vercel KV,
-    # Supabase, or similar persistent storage
+
+    # Always try to persist to KV
+    success = kv_set(SCORES_KEY, scores)
+    if not success:
+        print("Warning: Failed to persist scores to KV")
+
+    return success
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -74,11 +120,12 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         self.end_headers()
         self.wfile.write(json.dumps(scores).encode('utf-8'))
 
     def do_POST(self):
-        """Handle POST /api/highscores - add new score"""
+        """Handle POST /api/highscores - add new score (NEVER overwrites)"""
         try:
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
@@ -99,10 +146,10 @@ class handler(BaseHTTPRequestHandler):
             if not name:
                 name = 'ANONYMOUS'
 
-            # Load existing scores
+            # Load existing scores from persistent storage
             scores = load_scores()
 
-            # Create entry
+            # Create entry with server timestamp
             entry = {
                 'name': name,
                 'score': int(new_score['score']),
@@ -113,17 +160,19 @@ class handler(BaseHTTPRequestHandler):
                 'date': datetime.now().isoformat()
             }
 
-            # Add and sort
+            # ALWAYS ADD - never overwrite or reject scores
             scores.append(entry)
+
+            # Sort by score descending
             scores.sort(key=lambda x: x['score'], reverse=True)
 
-            # Keep reasonable limit for memory (but save more than just top 10)
+            # Keep top N scores (but generous limit - 500)
             scores = scores[:MAX_STORED_SCORES]
 
-            # Save (in-memory)
-            save_scores(scores)
+            # Persist to KV storage immediately
+            save_success = save_scores(scores)
 
-            # Find rank
+            # Find rank of the new entry
             rank = 0
             for i, s in enumerate(scores):
                 if (s['name'] == entry['name'] and
@@ -136,8 +185,16 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.end_headers()
-            self.wfile.write(json.dumps({'rank': rank, 'scores': scores}).encode('utf-8'))
+
+            response_data = {
+                'success': True,
+                'rank': rank,
+                'persisted': save_success,
+                'scores': scores
+            }
+            self.wfile.write(json.dumps(response_data).encode('utf-8'))
 
         except (json.JSONDecodeError, ValueError) as e:
             self.send_response(400)
