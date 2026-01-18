@@ -1,7 +1,7 @@
 """
 Vercel Serverless Function for Dragon Nest Defender Highscores
 Handles GET and POST requests to /api/highscores
-Uses Vercel KV (Redis) for persistent storage
+Uses Vercel Blob for persistent storage
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -12,12 +12,12 @@ import urllib.request
 import urllib.error
 
 # No limit on stored scores - save ALL scores
-MAX_STORED_SCORES = 500  # Generous limit for KV storage
+MAX_STORED_SCORES = 500  # Generous limit for Blob storage
 
-# Vercel KV configuration
-KV_REST_API_URL = os.environ.get('KV_REST_API_URL', '')
-KV_REST_API_TOKEN = os.environ.get('KV_REST_API_TOKEN', '')
-SCORES_KEY = 'dragon_nest_highscores'
+# Vercel Blob configuration
+BLOB_READ_WRITE_TOKEN = os.environ.get('BLOB_READ_WRITE_TOKEN', '')
+BLOB_STORE_ID = os.environ.get('BLOB_STORE_ID', '')
+SCORES_FILENAME = 'highscores.json'
 
 def get_default_scores():
     """Return default scores when no persistence is available"""
@@ -33,82 +33,87 @@ def get_default_scores():
         {"name": "VIALEO", "score": 1198, "difficulty": "hard", "level": "beach", "eggsDelivered": 27, "gameTime": 194, "date": "2026-01-17T21:43:21.410195"}
     ]
 
-def kv_get(key):
-    """Get value from Vercel KV"""
-    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+def blob_get():
+    """Get highscores from Vercel Blob"""
+    if not BLOB_READ_WRITE_TOKEN:
         return None
 
     try:
-        url = f"{KV_REST_API_URL}/get/{key}"
-        req = urllib.request.Request(url)
-        req.add_header('Authorization', f'Bearer {KV_REST_API_TOKEN}')
+        # List blobs to find our highscores file
+        list_url = "https://blob.vercel-storage.com?prefix=highscores"
+        req = urllib.request.Request(list_url)
+        req.add_header('Authorization', f'Bearer {BLOB_READ_WRITE_TOKEN}')
 
         with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode('utf-8'))
-            result = data.get('result')
-            if result:
-                return json.loads(result)
-            return None
+            blobs = data.get('blobs', [])
+
+            # Find our highscores file
+            for blob in blobs:
+                if blob.get('pathname') == SCORES_FILENAME:
+                    # Fetch the blob content
+                    blob_url = blob.get('url')
+                    if blob_url:
+                        with urllib.request.urlopen(blob_url, timeout=5) as blob_response:
+                            return json.loads(blob_response.read().decode('utf-8'))
+
+        return None
     except Exception as e:
-        print(f"KV GET error: {e}")
+        print(f"Blob GET error: {e}")
         return None
 
-def kv_set(key, value):
-    """Set value in Vercel KV"""
-    if not KV_REST_API_URL or not KV_REST_API_TOKEN:
+def blob_put(scores):
+    """Save highscores to Vercel Blob"""
+    if not BLOB_READ_WRITE_TOKEN:
         return False
 
     try:
-        # URL-encode the JSON value
-        json_value = json.dumps(value)
-        url = f"{KV_REST_API_URL}/set/{key}"
+        # Upload to Vercel Blob
+        url = f"https://blob.vercel-storage.com/{SCORES_FILENAME}"
+        json_data = json.dumps(scores).encode('utf-8')
 
-        # Use POST with body
-        req = urllib.request.Request(url, method='POST')
-        req.add_header('Authorization', f'Bearer {KV_REST_API_TOKEN}')
+        req = urllib.request.Request(url, data=json_data, method='PUT')
+        req.add_header('Authorization', f'Bearer {BLOB_READ_WRITE_TOKEN}')
         req.add_header('Content-Type', 'application/json')
+        req.add_header('x-api-version', '7')
+        req.add_header('x-content-type', 'application/json')
 
-        body = json.dumps(json_value).encode('utf-8')
-
-        with urllib.request.urlopen(req, body, timeout=5) as response:
-            return response.status == 200
+        with urllib.request.urlopen(req, timeout=10) as response:
+            return response.status in [200, 201]
     except Exception as e:
-        print(f"KV SET error: {e}")
+        print(f"Blob PUT error: {e}")
         return False
 
-# In-memory cache for performance (refreshed from KV on each request)
+# In-memory cache
 _scores_cache = None
-_cache_loaded = False
 
 def load_scores():
-    """Load scores from Vercel KV with fallback to defaults"""
-    global _scores_cache, _cache_loaded
+    """Load scores from Vercel Blob with fallback to defaults"""
+    global _scores_cache
 
-    # Try to load from KV
-    scores = kv_get(SCORES_KEY)
+    # Try to load from Blob
+    scores = blob_get()
     if scores is not None:
         _scores_cache = scores
-        _cache_loaded = True
         return scores
 
-    # If KV is not configured or empty, use defaults
-    if not _cache_loaded:
+    # If Blob is not configured or empty, use defaults
+    if _scores_cache is None:
         _scores_cache = get_default_scores()
-        _cache_loaded = True
-        # Try to save defaults to KV
-        kv_set(SCORES_KEY, _scores_cache)
+        # Try to save defaults to Blob
+        blob_put(_scores_cache)
 
     return _scores_cache
 
 def save_scores(scores):
-    """Save scores to Vercel KV"""
+    """Save scores to Vercel Blob"""
     global _scores_cache
     _scores_cache = scores
 
-    # Always try to persist to KV
-    success = kv_set(SCORES_KEY, scores)
+    # Always try to persist to Blob
+    success = blob_put(scores)
     if not success:
-        print("Warning: Failed to persist scores to KV")
+        print("Warning: Failed to persist scores to Blob")
 
     return success
 
@@ -169,7 +174,7 @@ class handler(BaseHTTPRequestHandler):
             # Keep top N scores (but generous limit - 500)
             scores = scores[:MAX_STORED_SCORES]
 
-            # Persist to KV storage immediately
+            # Persist to Blob storage immediately
             save_success = save_scores(scores)
 
             # Find rank of the new entry
