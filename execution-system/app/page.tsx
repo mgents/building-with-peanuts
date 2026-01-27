@@ -27,7 +27,6 @@ export default function UnifiedPage() {
   const [eveningPractices, setEveningPractices] = useState<DailyPractice[]>([]);
   const [completions, setCompletions] = useState<DailyCompletion[]>([]);
   const [today] = useState(() => formatDate(new Date()));
-  const [currentTime, setCurrentTime] = useState('');
   const [dailyRating, setDailyRating] = useState<number>(0);
   const [weekStart, setWeekStart] = useState('');
   const [weekEnd, setWeekEnd] = useState('');
@@ -105,20 +104,6 @@ export default function UnifiedPage() {
     setWeekStart(start);
     setWeekEnd(end);
     setWeekCompletions(getCompletionsForWeek(start, end));
-
-    // Update time
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 60000);
-
-    return () => clearInterval(interval);
   }, [today]);
 
   const handleToggle = (practiceId: string) => {
@@ -180,14 +165,21 @@ export default function UnifiedPage() {
     <div className="space-y-3 sm:space-y-4">
       {/* Header */}
       <div className="text-center bg-gradient-to-br from-zinc-700 via-zinc-700 to-zinc-800 p-6 sm:p-10 rounded-2xl shadow-2xl border border-amber-500/40 relative overflow-hidden">
+        {/* Circular decorative elements */}
+        <div className="absolute top-0 left-1/4 w-32 h-32 border-2 border-amber-500/20 rounded-full"></div>
+        <div className="absolute top-0 left-1/4 w-24 h-24 border-2 border-blue-500/20 rounded-full ml-4 mt-4"></div>
+        <div className="absolute bottom-0 right-1/4 w-40 h-40 border-2 border-amber-500/10 rounded-full"></div>
+        <div className="absolute bottom-0 right-1/4 w-28 h-28 border-2 border-blue-500/15 rounded-full mr-6 mb-6"></div>
+
         {/* Edge glow effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/20 via-transparent to-blue-500/20 rounded-2xl"></div>
+
         <div className="relative z-10">
+          <div className="text-[10px] sm:text-xs text-zinc-400 tracking-[0.3em] uppercase mb-2">Sovereign Stealth Luxury</div>
           <h2 className="text-3xl sm:text-5xl font-serif font-bold tracking-wide bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent mb-1">
             The Sovereign Protocol
           </h2>
-          <p className="text-3xl sm:text-5xl mt-4 font-serif font-bold text-white">{currentTime}</p>
-          <p className="text-xs sm:text-sm mt-3 text-zinc-300 tracking-wide uppercase">
+          <p className="text-sm sm:text-lg mt-4 text-zinc-300 tracking-wide uppercase font-light">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
               year: 'numeric',
@@ -218,6 +210,9 @@ export default function UnifiedPage() {
             {/* Faith Statement */}
             {faithStatement && (
               <div className="bg-gradient-to-br from-zinc-700/90 to-zinc-800/90 backdrop-blur-xl p-5 sm:p-7 rounded-xl border border-amber-500/30 shadow-xl relative overflow-hidden group">
+                {/* Circular design element */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 border-2 border-amber-500/20 rounded-full"></div>
+                <div className="absolute -top-6 -right-6 w-20 h-20 border-2 border-amber-500/30 rounded-full"></div>
                 {/* Edge glow */}
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-transparent to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <h4 className="text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-widest mb-3 sm:mb-4 relative z-10">
@@ -233,6 +228,9 @@ export default function UnifiedPage() {
             {/* Chief Aim */}
             {chiefAim && (
               <div className="bg-gradient-to-br from-zinc-700/90 to-zinc-800/90 backdrop-blur-xl p-5 sm:p-7 rounded-xl border border-blue-500/30 shadow-xl relative overflow-hidden group">
+                {/* Circular design element */}
+                <div className="absolute -bottom-10 -left-10 w-32 h-32 border-2 border-blue-500/20 rounded-full"></div>
+                <div className="absolute -bottom-6 -left-6 w-20 h-20 border-2 border-blue-500/30 rounded-full"></div>
                 {/* Edge glow */}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <h4 className="text-xs sm:text-sm font-bold text-blue-300 uppercase tracking-widest mb-3 sm:mb-4 relative z-10">
@@ -296,6 +294,9 @@ export default function UnifiedPage() {
             {/* Faith Statement (2nd reading) */}
             {faithStatement && (
               <div className="bg-gradient-to-br from-zinc-700/90 to-zinc-800/90 backdrop-blur-xl p-5 sm:p-7 rounded-xl border border-amber-500/30 shadow-xl relative overflow-hidden group">
+                {/* Circular design element */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 border-2 border-amber-500/20 rounded-full"></div>
+                <div className="absolute -top-6 -right-6 w-20 h-20 border-2 border-amber-500/30 rounded-full"></div>
                 <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 via-transparent to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <h4 className="text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-widest mb-3 sm:mb-4 relative z-10">
                   ◆ Faith Protocol (Second Execution)
@@ -323,11 +324,16 @@ export default function UnifiedPage() {
             </div>
 
             {/* Daily Rating */}
-            <div className="bg-gradient-to-br from-zinc-700/90 to-zinc-800/90 backdrop-blur-xl p-5 sm:p-7 rounded-xl border border-amber-500/40 shadow-xl">
-              <h4 className="text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-widest mb-4 sm:mb-6 text-center">
+            <div className="bg-gradient-to-br from-zinc-700/90 to-zinc-800/90 backdrop-blur-xl p-5 sm:p-7 rounded-xl border border-amber-500/40 shadow-xl relative overflow-hidden">
+              {/* Large circular design element behind ratings */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-amber-500/10 rounded-full"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 border-2 border-blue-500/10 rounded-full"></div>
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 border border-amber-500/20 rounded-full"></div>
+
+              <h4 className="text-xs sm:text-sm font-bold text-amber-300 uppercase tracking-widest mb-4 sm:mb-6 text-center relative z-10">
                 ◆ Daily Performance Index
               </h4>
-              <div className="flex items-center justify-center gap-3 sm:gap-4 mt-4">
+              <div className="flex items-center justify-center gap-3 sm:gap-4 mt-4 relative z-10">
                 {[1, 2, 3, 4, 5].map((rating) => (
                   <button
                     key={rating}
@@ -346,7 +352,7 @@ export default function UnifiedPage() {
                 ))}
               </div>
               {dailyRating > 0 && (
-                <p className="text-center text-xs sm:text-sm text-zinc-300 mt-4 sm:mt-5 uppercase tracking-wide">
+                <p className="text-center text-xs sm:text-sm text-zinc-300 mt-4 sm:mt-5 uppercase tracking-wide relative z-10">
                   Performance Rating: <span className="text-amber-300 font-bold">{dailyRating}/5</span>
                 </p>
               )}
