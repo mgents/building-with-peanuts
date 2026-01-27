@@ -1,6 +1,6 @@
 // localStorage utilities for Personal Execution System
 
-import { UserData, Statement, DailyCompletion, WeeklyReflection, BookInsight, DailyPractice } from './types';
+import { UserData, Statement, DailyCompletion, WeeklyReflection, BookInsight, DailyPractice, DailyRating } from './types';
 
 const STORAGE_KEY = 'personal-execution-system';
 
@@ -10,7 +10,8 @@ const getDefaultData = (): UserData => ({
   insights: [],
   practices: [],
   completions: [],
-  reflections: []
+  reflections: [],
+  dailyRatings: []
 });
 
 // Get all data from localStorage
@@ -21,7 +22,12 @@ export const getData = (): UserData => {
   if (!stored) return getDefaultData();
 
   try {
-    return JSON.parse(stored);
+    const data = JSON.parse(stored);
+    // Ensure dailyRatings exists for backward compatibility
+    if (!data.dailyRatings) {
+      data.dailyRatings = [];
+    }
+    return data;
   } catch {
     return getDefaultData();
   }
@@ -164,4 +170,32 @@ export const getWeekEnd = (weekStart: string): string => {
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   return formatDate(end);
+};
+
+// Daily ratings
+export const getRatingForDate = (date: string): DailyRating | undefined => {
+  return getData().dailyRatings.find(r => r.date === date);
+};
+
+export const saveRating = (date: string, rating: number): void => {
+  const data = getData();
+  const existing = data.dailyRatings.findIndex(r => r.date === date);
+
+  const ratingData: DailyRating = {
+    date,
+    rating,
+    timestamp: new Date().toISOString()
+  };
+
+  if (existing >= 0) {
+    data.dailyRatings[existing] = ratingData;
+  } else {
+    data.dailyRatings.push(ratingData);
+  }
+
+  saveData(data);
+};
+
+export const getRatingsForWeek = (weekStart: string, weekEnd: string): DailyRating[] => {
+  return getData().dailyRatings.filter(r => r.date >= weekStart && r.date <= weekEnd);
 };

@@ -53,10 +53,17 @@ export interface WeeklyReflection {
   completedAt: string;
 }
 
+export interface DailyRating {
+  date: string; // YYYY-MM-DD
+  rating: number; // 1-5
+  timestamp: string;
+}
+
 export interface UserData {
   statements: Statement[];
   insights: BookInsight[];
   practices: DailyPractice[];
   completions: DailyCompletion[];
   reflections: WeeklyReflection[];
+  dailyRatings: DailyRating[];
 }

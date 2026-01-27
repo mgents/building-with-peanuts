@@ -84,6 +84,15 @@ export default function DashboardPage() {
     return streak;
   };
 
+  // Don't render until dates are initialized
+  if (!weekStart || !weekEnd) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-neutral-600">Loading...</p>
+      </div>
+    );
+  }
+
   const days = getDaysInWeek();
   const weeklyRate = getWeeklyCompletionRate();
   const totalCompleted = getTotalCompletedPractices();

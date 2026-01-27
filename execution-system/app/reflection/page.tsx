@@ -110,6 +110,15 @@ export default function ReflectionPage() {
     </div>
   );
 
+  // Don't render until dates are initialized
+  if (!weekStart || !weekEnd) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-neutral-600">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}

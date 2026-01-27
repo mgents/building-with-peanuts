@@ -33,17 +33,10 @@ export const defaultPractices: Omit<DailyPractice, 'id'>[] = [
     source: 'The 5 AM Club'
   },
   {
-    name: 'Visualization',
-    description: 'Visualize your ideal day and success in vivid detail',
-    frequency: 'daily',
-    timeOfDay: 'morning',
-    source: 'The 5 AM Club'
-  },
-  {
     name: 'Gratitude Practice',
-    description: 'Express gratitude for what you have and what you will achieve',
+    description: 'Express gratitude for what you have and what you accomplished today',
     frequency: 'daily',
-    timeOfDay: 'morning',
+    timeOfDay: 'evening',
     source: 'The 5 AM Club'
   },
 
@@ -59,19 +52,12 @@ export const defaultPractices: Omit<DailyPractice, 'id'>[] = [
     name: 'Autosuggestion Practice',
     description: 'Repeat affirmations to influence your subconscious mind',
     frequency: 'daily',
-    timeOfDay: 'both',
+    timeOfDay: 'evening',
     source: 'Think and Grow Rich'
   },
   {
     name: 'Specialized Knowledge Study',
     description: 'Study specialized knowledge related to your definite purpose',
-    frequency: 'daily',
-    timeOfDay: 'morning',
-    source: 'Think and Grow Rich'
-  },
-  {
-    name: 'Imagination Exercise',
-    description: 'Engage synthetic and creative imagination to plan your path forward',
     frequency: 'daily',
     timeOfDay: 'morning',
     source: 'Think and Grow Rich'
@@ -87,7 +73,7 @@ export const defaultPractices: Omit<DailyPractice, 'id'>[] = [
     name: 'Weekly Planning Session',
     description: 'Review weekly progress, refine plans, and set intentions for the coming week',
     frequency: 'weekly',
-    timeOfDay: 'evening',
+    timeOfDay: 'morning',
     source: 'Both'
   }
 ];
